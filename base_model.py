@@ -20,8 +20,8 @@ def main():
     actor_list = []
 
     try:
-        client = carla.Client("127.0.0.1", 2000)
-        client.set_timeout(2.0)
+        client = carla.Client("localhost", 2000)
+        client.set_timeout(10.0)
 
         # Town05, Town07 has highway, parking, standard roads
         world = client.get_world()
@@ -39,7 +39,7 @@ def main():
         print('created %s' % vehicle.type_id)
 
         # Let's put the vehicle to drive around.
-        vehicle.set_autopilot(True)
+        # vehicle.set_autopilot(True)
 
         # Agent time to live
         time.sleep(30)
