@@ -16,6 +16,7 @@ import time
 import cv2
 import numpy as np
 import math
+# import pygame
 
 
 def main():
@@ -23,8 +24,9 @@ def main():
 
     def process_img(image):
         i = np.array(image.raw_data)
-        i2 = i.reshape((640, 480, 4))
+        i2 = i.reshape((480, 640, 4))
         i3 = i2[:, :, :3]
+        # image.save_to_disk('data/image_%s.png' % image.timestamp)
         cv2.imshow("", i3)
         cv2.waitKey(1)
         # return i3/255.0
@@ -64,7 +66,7 @@ def main():
         print('created %s' % cam_rgb.type_id)
 
         # Activate Sensors
-        # cam_rgb.listen(lambda data: process_img(data))
+        cam_rgb.listen(lambda data: process_img(data))
 
         # Let's put the vehicle to drive around.
         vehicle.set_autopilot(True)
