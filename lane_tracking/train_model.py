@@ -334,7 +334,7 @@ test_dataset_vis = CarlaDataset(
 for i in range(3):
     n = np.random.choice(len(test_dataset_vis))
 
-    image_vis = test_dataset_vis[n][0].astype('uint8')
+    # image_vis = test_dataset_vis[n][0].astype('uint8')
     image, gt_mask = test_dataset_vis[n]
 
     x_tensor = torch.from_numpy(image).to(DEVICE).unsqueeze(0)
@@ -349,4 +349,3 @@ for i in range(3):
         predicted_mask_left=pr_mask_left,
         predicted_mask_right=pr_mask_right
     )
-    

@@ -17,19 +17,46 @@ import cv2
 import numpy as np
 import math
 # import pygame
+from matplotlib import pyplot as plt
+from lane_tracking.lane_detector import LaneDetector
 
 
 def main():
     actor_list = []
+    # model_path = "lane_tracking/best_model.pth"
+    # lane_detect = LaneDetector(model_path=model_path)
 
     def process_img(image):
         i = np.array(image.raw_data)
-        i2 = i.reshape((480, 640, 4))
+        i2 = i.reshape((512, 1024, 4))
         i3 = i2[:, :, :3]
         # image.save_to_disk('data/image_%s.png' % image.timestamp)
         cv2.imshow("", i3)
         cv2.waitKey(1)
+        # left, right = lane_detect(i3)
+        # x = np.linspace(0,60)
+        # yl = left(x)
+        # yr = right(x)
+        # print(yl.shape, yr.shape)
+        # # plt.plot(x, yl, label="yl")
+        # # plt.plot(x, yr, label="yr")
+
+
+        # visualize(predicted_mask_left=left,
+        #           predicted_mask_right=right)
         # return i3/255.0
+
+    def visualize(**images):
+        """PLot images in one row."""
+        n = len(images)
+        plt.figure(figsize=(16, 5))
+        for i, (name, image) in enumerate(images.items()):
+            plt.subplot(1, n, i + 1)
+            plt.xticks([])
+            plt.yticks([])
+            plt.title(' '.join(name.split('_')).title())
+            plt.imshow(image)
+        plt.show()
 
 
     try:
@@ -48,8 +75,8 @@ def main():
 
         # Camera RGB sensor
         bp_cam_rgb = blueprint_library.find('sensor.camera.rgb')
-        bp_cam_rgb.set_attribute('image_size_x', '640')
-        bp_cam_rgb.set_attribute('image_size_y', '480')
+        bp_cam_rgb.set_attribute('image_size_x', '1024')
+        bp_cam_rgb.set_attribute('image_size_y', '512')
         bp_cam_rgb.set_attribute('fov', '110')
         # bp_cam_rgb.set_attribute('sensor_tick', '1.0')
 
