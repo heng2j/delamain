@@ -70,8 +70,9 @@ def main():
         # blueprint library
         blueprint_library = world.get_blueprint_library()
 
-        # Agent = Tesla model 3
-        bp = blueprint_library.find('vehicle.tesla.model3')
+        # Agent = Tesla model 3 / Police
+        # bp = blueprint_library.find('vehicle.tesla.model3')
+        bp = blueprint_library.find('vehicle.dodge_charger.police')
 
         # Camera RGB sensor
         bp_cam_rgb = blueprint_library.find('sensor.camera.rgb')
