@@ -18,7 +18,8 @@ import numpy as np
 import math
 # import pygame
 from matplotlib import pyplot as plt
-from lane_tracking.lane_detector import LaneDetector
+# from lane_tracking.lane_detector import LaneDetector
+from gps_nav.gnss import *
 
 
 def main():
@@ -71,14 +72,22 @@ def main():
         blueprint_library = world.get_blueprint_library()
 
         # Agent = Tesla model 3
-        bp = blueprint_library.find('vehicle.tesla.model3')
+        bp = blueprint_library.find('vehicle.dodge_charger.police')
 
         # Camera RGB sensor
         bp_cam_rgb = blueprint_library.find('sensor.camera.rgb')
         bp_cam_rgb.set_attribute('image_size_x', '1024')
         bp_cam_rgb.set_attribute('image_size_y', '512')
         bp_cam_rgb.set_attribute('fov', '110')
-        # bp_cam_rgb.set_attribute('sensor_tick', '1.0')
+        cam_rgb_transform = carla.Transform(carla.Location(x=2.5, z=0.7))
+        # bp_cam_rgb.set_attribute('sensor_tick', str(1.0))  # Wait time for sensor to update (1.0 = 1s)
+
+        # GNSS Sensor
+        gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
+        gnss_location = carla.Location(0, 0, 0)
+        gnss_rotation = carla.Rotation(0, 0, 0)
+        gnss_transform = carla.Transform(gnss_location, gnss_rotation)
+        gnss_bp.set_attribute("sensor_tick", str(1.0))  # Wait time for sensor to update (1.0 = 1s)
 
         # Spawn Agent
         transform = random.choice(world.get_map().get_spawn_points())
@@ -87,13 +96,16 @@ def main():
         print('created %s' % vehicle.type_id)
 
         # Spawn Sensors
-        transform = carla.Transform(carla.Location(x=2.5, z=0.7))
-        cam_rgb = world.spawn_actor(bp_cam_rgb, transform, attach_to=vehicle)
+        cam_rgb = world.spawn_actor(bp_cam_rgb, cam_rgb_transform, attach_to=vehicle)
         actor_list.append(cam_rgb)
         print('created %s' % cam_rgb.type_id)
+        gnss = world.spawn_actor(gnss_bp, gnss_transform, attach_to=vehicle)
+        actor_list.append(gnss)
+        print('created %s' % gnss.type_id)
 
         # Activate Sensors
-        cam_rgb.listen(lambda data: process_img(data))
+        # cam_rgb.listen(lambda data: process_img(data))  # Camera RGB Sensor
+        gnss.listen(lambda event: gnss_live_location(event))  # GNSS Sensor
 
         # Let's put the vehicle to drive around.
         vehicle.set_autopilot(True)
