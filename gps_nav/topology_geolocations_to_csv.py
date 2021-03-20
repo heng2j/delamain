@@ -3,6 +3,7 @@ TOPOLOGY GEOLOCATIONS TO CSV
 
 Script to acquire the topology of the currently running CARLA map.
 Then transforming every single waypoint location to geolocations coordinates (latitude, longitude, altitude).
+Also calculates the distance between waypoints of each tuple.
 Finally getting this data into a DataFrame and saving it locally into a CSV file.
 
 Created by DevGlitch
@@ -23,6 +24,7 @@ except IndexError:
 import carla
 import argparse
 import pandas as pd
+import numpy as np
 
 
 def main():
@@ -58,32 +60,59 @@ def main():
         lat_end = []
         lon_end = []
         alt_end = []
-        road_id = []
+        road_id_start = []
+        road_id_end = []
+        distance = []
 
         for t in topology_list:
 
             # Convert waypoints carla locations to geolocations
+
             # Starting waypoints
             waypoint_geo_0 = carla_map.transform_to_geolocation(t[0].transform.location)
             lat_start += [waypoint_geo_0.latitude]
             lon_start += [waypoint_geo_0.longitude]
             alt_start += [waypoint_geo_0.altitude]
+
             # Ending waypoints
             waypoint_geo_1 = carla_map.transform_to_geolocation(t[1].transform.location)
             lat_end += [waypoint_geo_1.latitude]
             lon_end += [waypoint_geo_1.longitude]
             alt_end += [waypoint_geo_1.altitude]
+
             # Get Road ID of each tuple
-            road_id = t[0].road_id
+            road_id_start += [t[0].road_id]
+            road_id_end += [t[1].road_id]
+
+            # Calculate the distance in kilometer between each waypoint of each tuple
+            # Great-circle distance formula: https://en.wikipedia.org/wiki/Great-circle_distance
+            lat_0 = np.radians(waypoint_geo_0.latitude)
+            lon_0 = np.radians(waypoint_geo_0.longitude)
+            lat_1 = np.radians(waypoint_geo_1.latitude)
+            lon_1 = np.radians(waypoint_geo_1.longitude)
+            diff_lon = lon_0 - lon_1
+            earth_radius = 6371  # radius of the earth in km ### THIS CAN BE CHANGE TO METERS IF NEEDED ###
+
+            y = np.sqrt((np.cos(lat_1) * np.sin(diff_lon)) ** 2 +
+                        (np.cos(lat_0) * np.sin(lat_1) - np.sin(lat_0) *
+                         np.cos(lat_1) * np.cos(diff_lon)) ** 2)
+            x = np.sin(lat_0) * np.sin(lat_1) + \
+                np.cos(lat_0) * np.cos(lat_1) * np.cos(diff_lon)
+            c = np.arctan2(y, x)
+
+            distance += [earth_radius * c]
 
         # Create DataFrame
         df = pd.DataFrame(
-            list(zip(road_id, lat_start, lon_start, alt_start, lat_end, lon_end, alt_end)),
-            columns=["road_id", "lat_start", "lon_start", "alt_start", "lat_end", "lon_end", "alt_end"]
+            list(zip(road_id_start, lat_start, lon_start, alt_start, road_id_end, lat_end, lon_end, alt_end, distance)),
+            columns=["road_id_start", "lat_start", "lon_start", "alt_start", "road_id_end", "lat_end", "lon_end", "alt_end", "distance"]
         )
 
+        # Filename using the name of the current carla map running
+        filename = str(world.get_map().name) + "_topology.csv"
+
         # Save DataFrame to local CSV file
-        df.to_csv("town05_topology_geolocations.csv")
+        df.to_csv(filename)
 
     finally:
         pass
@@ -94,4 +123,3 @@ if __name__ == '__main__':
         main()
     finally:
         print('Done.')
-
