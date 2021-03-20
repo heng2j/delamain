@@ -9,8 +9,14 @@ Team Members:
 
 <br>
 
+![Python version](https://img.shields.io/badge/python-v3.7-blue)
+
+...Add more badges...
+
+<br>
+
 <!-- PROJECT LOGO -->
-Insert image here
+...Insert image here...
 
 <!-- DESCRIPTION OF THE PROJECT -->
 ## Description
