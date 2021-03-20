@@ -57,7 +57,7 @@ def main():
                                     color=carla.Color(r=0, g=255, b=0), life_time=120.0,
                                     persistent_lines=True)
             # Ending waypoint (red)
-            world.debug.draw_string(t[1].transform.location, 'O', draw_shadow=False,
+            world.debug.draw_string(t[1].transform.location, 'X', draw_shadow=False,
                                     color=carla.Color(r=255, g=0, b=0), life_time=120.0,
                                     persistent_lines=True)
 
