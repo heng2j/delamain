@@ -22,6 +22,7 @@ except IndexError:
 
 import carla
 import argparse
+import matplotlib.pyplot as plt
 
 
 def main():
@@ -47,7 +48,7 @@ def main():
         world = client.get_world()
         carla_map = world.get_map()
 
-        import matplotlib.pyplot as plt
+        town = str(world.get_map().name)
 
         # Getting the topology of the map including pairs of waypoints.
         # The first element is the origin and the second one is the destination.
@@ -79,11 +80,25 @@ def main():
         # Plot each road (on a different color by default)
         for road in road_list:
             plt.plot(
-                [wp.transform.location.x for wp in road],
-                [wp.transform.location.y for wp in road])
+                [wp.transform.location.y for wp in road],
+                [wp.transform.location.x for wp in road])
 
         # Display plot
-        plt.show()
+        # plt.show()
+
+        # Filename and directory using the name of the current carla map running
+        directory = town + "_data"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        filename = town + "_road_network_map.png"
+        filepath = os.path.join(directory, filename)
+
+        # Save Road Network Map
+        if os.path.isfile(filepath):
+            print(town, "road network map file already exist.")
+        else:
+            print("Saving", town, "road network map (png file).")
+            plt.savefig(filepath)
 
     finally:
         pass
