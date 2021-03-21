@@ -5,6 +5,6 @@ data/
 .idea/misc.xml
 .idea/modules.xml
 .idea/vcs.xml
-
-*.pyc
+Project Proposal/.DS_Store
+.DS_Store
 *.pyc
