@@ -16,9 +16,9 @@ import time
 import cv2
 import numpy as np
 import math
-# import pygame
+import pygame
 from matplotlib import pyplot as plt
-from lane_tracking.lane_detector import LaneDetector
+from lane_tracking.cores.lane_detection.lane_detector import LaneDetector
 
 
 def main():
