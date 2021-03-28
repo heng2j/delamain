@@ -16,18 +16,17 @@ except IndexError:
 # ==============================================================================
 
 import carla
-import argparse
 import pygame
+import argparse
 
 from base.hud import HUD
 from base.world import World
 from base.manual_control import KeyboardControl
+from lane_tracking.util.carla_util import CarlaSyncMode
 from base.debug_cam import process_img
 
 from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track2 import lane_track_init
-from lane_tracking.util.carla_util import CarlaSyncMode, should_quit, draw_image
-
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -49,17 +48,17 @@ def game_loop(args):
         hud = HUD(args.width, args.height)
         test_map = client.load_world('Town04')
         world = World(test_map, hud, args)
-        m_controller = KeyboardControl(world, False)
+        controller = KeyboardControl(world, False)
 
-        # ======================================================================
         actor_list = []
         sensors = []
 
-        #TODO - features init/misc
+        # ==================================================================
+        # TODO - features init/misc
         a_controller = PurePursuitPlusPID()
         cg, ld = lane_track_init()
 
-        #TODO - add sensors
+        # TODO - add sensors
         blueprint_library = world.world.get_blueprint_library()
 
         # Camera RGB sensor
@@ -70,39 +69,42 @@ def game_loop(args):
         bp_cam_rgb.set_attribute('sensor_tick', '0.0')
 
         # Spawn Sensors
-        transform = carla.Transform(carla.Location(x=0.5, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
+        transform = carla.Transform(carla.Location(x=0.5, z=cg.height), carla.Rotation(pitch=-1 * cg.pitch_deg))
         cam_rgb = world.world.spawn_actor(bp_cam_rgb, transform, attach_to=world.player)
         print('created %s' % cam_rgb.type_id)
 
-        # Append actors
+        # Append actors / may not be necessary
         actor_list.append(cam_rgb)
         sensors.append(cam_rgb)
+        # ==================================================================
 
-        # Activate Sensors
-        # cam_rgb.listen(lambda data: process_img(data))
-        # ======================================================================
-
+        FPS = 60
         clock = pygame.time.Clock()
-        while True:
-            if should_quit():
-                return
-            # clock.tick()
-            clock.tick_busy_loop(60)
-            if m_controller.parse_events(client, world, clock):
-                return
-            # ==================================================================
-            # TODO - run features
+        # TODO - add sensor to SyncMode
+        with CarlaSyncMode(world.world, cam_rgb, fps=FPS) as sync_mode:
+            while True:
+                clock.tick_busy_loop(FPS)
+                if controller.parse_events(client, world, clock):
+                    return
+                # Advance the simulation and wait for the data.
+                tick_response = sync_mode.tick(timeout=2.0)
+                # Data retrieval
+                snapshot, image_rgb = tick_response
+                # Debug data
+                process_img(image_rgb)
+
+                # ==================================================================
+                # TODO - run features
 
 
-            # ==================================================================
+                # ==================================================================
 
-            world.tick(clock)
-            world.render(display)
-            pygame.display.flip()
+                world.tick(clock)
+                world.render(display)
+                pygame.display.flip()
     finally:
         if (world and world.recording_enabled):
             client.stop_recorder()
-
         if world is not None:
             world.destroy()
         pygame.quit()
@@ -111,7 +113,6 @@ def game_loop(args):
 # ==============================================================================
 # -- main() --------------------------------------------------------------------
 # ==============================================================================
-
 
 def main():
     argparser = argparse.ArgumentParser(

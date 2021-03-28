@@ -102,10 +102,9 @@ def main():
         #windshield cam
         cam_windshield_transform = carla.Transform(carla.Location(x=0.5, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
         bp = blueprint_library.find('sensor.camera.rgb')
-        fov = cg.field_of_view_deg
         bp.set_attribute('image_size_x', str(cg.image_width))
         bp.set_attribute('image_size_y', str(cg.image_height))
-        bp.set_attribute('fov', str(fov))
+        bp.set_attribute('fov', str(cg.field_of_view_deg))
         camera_windshield = world.spawn_actor(
             bp,
             cam_windshield_transform,
