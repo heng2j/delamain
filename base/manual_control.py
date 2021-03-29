@@ -193,7 +193,7 @@ class KeyboardControl(object):
                     #     self._control.gear = self._control.gear + 1
                     elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
                         self._autopilot_enabled = not self._autopilot_enabled
-                        world.player.set_autopilot(self._autopilot_enabled)
+                        # world.player.set_autopilot(self._autopilot_enabled)
                         world.hud.notification(
                             'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:

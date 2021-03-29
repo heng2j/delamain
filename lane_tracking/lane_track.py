@@ -71,8 +71,8 @@ def main():
     world = client.get_world()
     weather_presets = find_weather_presets()
     # print(weather_presets)
-    # world.set_weather(weather_presets[3][0])
-    world.set_weather(carla.WeatherParameters.HardRainSunset)
+    world.set_weather(weather_presets[3][0])
+    # world.set_weather(carla.WeatherParameters.HardRainSunset)
 
     controller = PurePursuitPlusPID()
 
@@ -116,42 +116,51 @@ def main():
         frame = 0
         max_error = 0
         FPS = 30
+        speed = 0
+        cross_track_error = 0
+        start_time = 0.0
+        times = 10
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
             while True:
                 if should_quit():
                     return
                 clock.tick()          
-                
+                start_time += clock.get_time()
+
                 # Advance the simulation and wait for the data. 
                 tick_response = sync_mode.tick(timeout=2.0)
 
                 snapshot, image_rgb, image_windshield = tick_response
-                traj = get_trajectory_from_lane_detector(ld, image_windshield)
 
-                # get velocity and angular velocity
-                vel = carla_vec_to_np_array(vehicle.get_velocity())
-                forward = carla_vec_to_np_array(vehicle.get_transform().get_forward_vector())
-                right = carla_vec_to_np_array(vehicle.get_transform().get_right_vector())
-                up = carla_vec_to_np_array(vehicle.get_transform().get_up_vector())
-                vx = vel.dot(forward)
-                vy = vel.dot(right)
-                vz = vel.dot(up)
-                ang_vel = carla_vec_to_np_array(vehicle.get_angular_velocity())
-                w = ang_vel.dot(up)
-                print("vx vy vz w {:.2f} {:.2f} {:.2f} {:.5f}".format(vx,vy,vz,w))
+                if start_time >= 1000.0/times:
+                    start_time = 0.0
+                    traj = get_trajectory_from_lane_detector(ld, image_windshield)
 
-                # PID control
-                speed = np.linalg.norm( carla_vec_to_np_array(vehicle.get_velocity()))
-                throttle, steer = controller.get_control(traj, speed, desired_speed=25, dt=1./FPS)
-                send_control(vehicle, throttle, steer, 0)
+                    # # get velocity and angular velocity
+                    # vel = carla_vec_to_np_array(vehicle.get_velocity())
+                    # forward = carla_vec_to_np_array(vehicle.get_transform().get_forward_vector())
+                    # right = carla_vec_to_np_array(vehicle.get_transform().get_right_vector())
+                    # up = carla_vec_to_np_array(vehicle.get_transform().get_up_vector())
+                    # vx = vel.dot(forward)
+                    # vy = vel.dot(right)
+                    # vz = vel.dot(up)
+                    # ang_vel = carla_vec_to_np_array(vehicle.get_angular_velocity())
+                    # w = ang_vel.dot(up)
+                    # print("vx vy vz w {:.2f} {:.2f} {:.2f} {:.5f}".format(vx,vy,vz,w))
+
+                    # PID control
+                    speed = np.linalg.norm(carla_vec_to_np_array(vehicle.get_velocity()))
+                    throttle, steer = controller.get_control(traj, speed, desired_speed=25, dt=1./FPS)
+                    send_control(vehicle, throttle, steer, 0)
+
+
+                    dist = dist_point_linestring(np.array([0,0]), traj)
+
+                    cross_track_error = int(dist*100)
+                max_error = max(max_error, cross_track_error)
 
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
-
-                dist = dist_point_linestring(np.array([0,0]), traj)
-
-                cross_track_error = int(dist*100)
-                max_error = max(max_error, cross_track_error)
 
                 # Draw the display.
                 draw_image(display, image_rgb)

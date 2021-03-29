@@ -26,5 +26,7 @@ def lane_track_debug(image):
 
     return poly_left, poly_right
 
+
 def debug_view(*image):
-    
+    for i in image:
+        process_img(i)

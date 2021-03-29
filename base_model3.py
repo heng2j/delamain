@@ -23,10 +23,10 @@ from base.hud import HUD
 from base.world import World
 from base.manual_control import KeyboardControl
 from lane_tracking.util.carla_util import CarlaSyncMode
-from base.debug_cam import process_img
+from base.debug_cam import debug_view
 
 from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
-from lane_tracking.lane_track2 import lane_track_init
+from lane_tracking.lane_track2 import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -46,7 +46,7 @@ def game_loop(args):
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
         hud = HUD(args.width, args.height)
-        test_map = client.load_world('Town04')
+        test_map = client.load_world('Town02')
         world = World(test_map, hud, args)
         controller = KeyboardControl(world, False)
 
@@ -78,7 +78,7 @@ def game_loop(args):
         sensors.append(cam_rgb)
         # ==================================================================
 
-        FPS = 60
+        FPS = 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
         with CarlaSyncMode(world.world, cam_rgb, fps=FPS) as sync_mode:
@@ -91,13 +91,18 @@ def game_loop(args):
                 # Data retrieval
                 snapshot, image_rgb = tick_response
                 # Debug data
-                process_img(image_rgb)
+                debug_view(image_rgb)
 
                 # ==================================================================
                 # TODO - run features
+                # traj = get_trajectory_from_lane_detector(ld, image_rgb) # stay in lane
 
 
                 # ==================================================================
+                # PID Control
+                # speed = get_speed(world.player)
+                # throttle, steer = a_controller.get_control(traj, speed, desired_speed=25, dt=1. / FPS)
+                # send_control(world.player, throttle, steer, 0)
 
                 world.tick(clock)
                 world.render(display)
