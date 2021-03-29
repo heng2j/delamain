@@ -5,5 +5,10 @@ data/
 .idea/misc.xml
 .idea/modules.xml
 .idea/vcs.xml
+<<<<<<< HEAD
 Project Proposal/.DS_Store
 .DS_Store
+=======
+
+*.pyc
+>>>>>>> c2c6e27de7604915d7d5f9a4d526518fb6a9112e
