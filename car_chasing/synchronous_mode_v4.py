@@ -416,7 +416,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # print("len(goal_state_set): ", len(goal_state_set))
 
                 # # Calculate planned paths in the local frame.
-                paths, path_validity = l_planner.plan_paths(goal_state_set)
+                # paths, path_validity = l_planner.plan_paths(goal_state_set)
 
                 # # Transform those paths back to the global frame.
                 # paths = local_planner.transform_paths(paths, ego_state)
@@ -457,9 +457,9 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # possibleAngle, drivableIndexes = semantic.FindPossibleAngle(image_segmentation,bbox,predicted_angle)
                 
 
-                # steer, throttle = drivingControl.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
+                steer, throttle = drivingControl.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
 
-                steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance, possibleAngle,None)
+                # steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance, possibleAngle,None)
 
                 # Choose approriate steer and throttle here
                 # steer, throttle = 0, 0.7
