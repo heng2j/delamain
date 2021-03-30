@@ -57,10 +57,10 @@ class LaneDetector():
         return background, left, right
     
     def detect_and_fit(self, img_array):
-        _, left, right = self.detect(img_array)
+        bg, left, right = self.detect(img_array)
         left_poly = self.fit_poly(left)
         right_poly = self.fit_poly(right)
-        return left_poly, right_poly
+        return left_poly, right_poly, bg
 
     def fit_poly(self, probs):
         probs_flat = np.ravel(probs[self.cut_v:, :])
