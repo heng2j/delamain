@@ -86,13 +86,13 @@ class PathOptimizer:
         # optimization methods.
         # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
         # ------------------------------------------------------------------
-        start_time = time.time()
+        # start_time = time.time()
         
         res = scipy.optimize.minimize(
             self.objective, x0=p0, method='Nelder-Mead', jac=self.objective_grad, constraints=bounds
         )
         
-        print("--- %s seconds ---" % (time.time() - start_time))
+        # print("--- %s seconds ---" % (time.time() - start_time))
         # ------------------------------------------------------------------
 
         spiral = self.sample_spiral(res.x)

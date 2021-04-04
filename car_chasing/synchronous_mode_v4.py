@@ -289,7 +289,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
         # --------------------------------------------------------------
 
-        FPS = 30
+        FPS = 10
         # Create a synchronous mode context.
         with CarlaSyncMode(world,camera_rgb, camera_segmentation, fps=FPS) as sync_mode:
 
@@ -416,7 +416,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # print("len(goal_state_set): ", len(goal_state_set))
 
                 # # Calculate planned paths in the local frame.
-                # paths, path_validity = l_planner.plan_paths(goal_state_set)
+                paths, path_validity = l_planner.plan_paths(goal_state_set)
 
                 # # Transform those paths back to the global frame.
                 # paths = local_planner.transform_paths(paths, ego_state)
