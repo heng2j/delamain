@@ -25,7 +25,7 @@ from base.manual_control import KeyboardControl
 from base.debug_cam import process_img
 
 from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
-from lane_tracking.lane_track2 import lane_track_init
+from lane_tracking.lane_track import lane_track_init
 from lane_tracking.util.carla_util import CarlaSyncMode, should_quit, draw_image
 
 
