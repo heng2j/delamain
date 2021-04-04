@@ -341,9 +341,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
 
 
-
-
-
                 if followDrivenPath:
                     if counter >= len(evaluation.history):
                         break
