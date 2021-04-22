@@ -85,14 +85,16 @@ def main():
             lon_end += [waypoint_geo_1.longitude]
             alt_end += [waypoint_geo_1.altitude]
 
-            # Calculate the distance in kilometer between each waypoint of each tuple
+            # Calculate the distance in meters between each waypoint of each tuple
             # Using the Great-circle distance formula: https://en.wikipedia.org/wiki/Great-circle_distance
             lat_0 = np.radians(waypoint_geo_0.latitude)
             lon_0 = np.radians(waypoint_geo_0.longitude)
             lat_1 = np.radians(waypoint_geo_1.latitude)
             lon_1 = np.radians(waypoint_geo_1.longitude)
             diff_lon = lon_0 - lon_1
-            earth_radius = 6371  # radius of the earth in km
+            # equatorial mean radius
+            # https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html
+            earth_radius = 6378137  # in meters
 
             y = np.sqrt((np.cos(lat_1) * np.sin(diff_lon)) ** 2 +
                         (np.cos(lat_0) * np.sin(lat_1) - np.sin(lat_0) *
