@@ -19,6 +19,7 @@ import carla
 import pygame
 import argparse
 import numpy as np
+import cv2
 
 from base.hud import HUD
 from base.world import World
@@ -28,11 +29,13 @@ from base.debug_cam import debug_view
 
 from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
+from lane_tracking.fast_track import fast_lane_init, get_lanes
 
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
 # ==============================================================================
+
 
 def game_loop(args):
     pygame.init()
@@ -59,6 +62,7 @@ def game_loop(args):
         # TODO - features init/misc
         a_controller = PurePursuitPlusPID()
         cg, ld = lane_track_init()
+        lane_net, lane_algo = fast_lane_init("culane")
 
         # TODO - add sensors
         blueprint_library = world.world.get_blueprint_library()
@@ -68,7 +72,6 @@ def game_loop(args):
         bp_cam_rgb.set_attribute('image_size_x', str(cg.image_width))
         bp_cam_rgb.set_attribute('image_size_y', str(cg.image_height))
         bp_cam_rgb.set_attribute('fov', str(cg.field_of_view_deg))
-        # bp_cam_rgb.set_attribute('sensor_tick', '0.0')
 
         # Spawn Sensors
         transform = carla.Transform(carla.Location(x=0.5, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
@@ -82,7 +85,7 @@ def game_loop(args):
 
         FPS = 30
         speed, traj = 0, np.array([])
-        time_cycle, cycles = 0.0, 8
+        time_cycle, cycles = 0.0, 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
         with CarlaSyncMode(world.world, cam_rgb, fps=FPS) as sync_mode:
@@ -102,11 +105,13 @@ def game_loop(args):
                     # ==================================================================
                     # TODO - run features
                     traj, lane_mask = get_trajectory_from_lane_detector(ld, image_rgb) # stay in lane
-
+                    # lane_mask = get_lanes(image_rgb, lane_net, lane_algo)
+                    # cv2.imwrite('carla_scene2.png', image_rgb)
+                    # print(len(traj), traj)
 
                     # ==================================================================
                     # Debug data
-                    debug_view(image_rgb, lane_mask)
+                    # debug_view(image_rgb, lane_mask)
                 # PID Control
                 if traj.any():
                     speed = get_speed(world.player)

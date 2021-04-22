@@ -20,9 +20,11 @@ class LaneDetector():
         if torch.cuda.is_available():
             self.device = "cuda"
             self.model = torch.load(model_path).to(self.device)
+            print("cuda")
         else:
             self.model = torch.load(model_path, map_location=torch.device("cpu"))
             self.device = "cpu"
+            print("cpu")
         self.encoder = encoder
         self.encoder_weights = encoder_weights
         preprocessing_fn = smp.encoders.get_preprocessing_fn(self.encoder, self.encoder_weights)
