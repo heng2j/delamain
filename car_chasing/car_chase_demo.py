@@ -17,6 +17,7 @@ except IndexError:
     pass
 
 import carla
+from typing import NamedTuple, List
 import random
 import cv2
 from pathlib import Path
@@ -355,7 +356,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                     actor_list.append(vehicleToFollow)
                     vehicleToFollow.set_simulate_physics(True)
-                    vehicleToFollow.set_autopilot(False)
+                    # vehicleToFollow.set_autopilot(False)
 
                 if followDrivenPath:
                     if counter >= len(evaluation.history):
