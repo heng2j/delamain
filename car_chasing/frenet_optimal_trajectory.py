@@ -43,6 +43,18 @@ def frenet_to_inertial(s, d, csp):
 
     return x, y, iz, iyaw
 
+def inertial_to_frenet(s, d, csp):
+    """
+    transform a point from inertial frame to frenet frame
+    input: frenet s and d variable and the instance of global cubic spline class
+    output: x and y in global frame
+    """
+    ix, iy, iz = csp.calc_position(s)
+    iyaw = csp.calc_yaw(s)
+    x = ix + d * math.cos(iyaw + math.pi / 2.0)
+    y = iy + d * math.sin(iyaw + math.pi / 2.0)
+
+    return x, y, iz, iyaw
 
 def update_frenet_coordinate(fpath, loc):
     """
@@ -278,8 +290,10 @@ class FrenetPlanner:
         # ------------------------ UPDATE S VALUE ------------------------------------ #
         # We calculate normal vector of s line and find error_s based on ego location. Note: This assumes error is small angle
         def update_s(current_s):
+            # print("current_s: ", current_s)
             s_yaw = self.csp.calc_yaw(current_s)
             s_x, s_y, s_z = self.csp.calc_position(current_s)
+            # print("current_s: ", current_s)
             ego_yaw = ego_state[4]
             s_norm = normalize([-np.sin(s_yaw), np.cos(s_yaw)])
             v1 = [ego_state[0] - s_x, ego_state[1] - s_y]
@@ -293,6 +307,7 @@ class FrenetPlanner:
         estimated_s = self.path.s[idx] % ego_state[6]
         estimated_s -= update_s(estimated_s)
         estimated_s = estimated_s  % ego_state[6]
+        # print("estimated_s: ", estimated_s)
         estimated_s += update_s(estimated_s)
         estimated_s = estimated_s % ego_state[6]
 
@@ -820,11 +835,13 @@ class FrenetPlanner:
 
         f_state = self.estimate_frenet_state(ego_state, idx)
 
-        # Frenet motion planning
-        best_path_idx, fplist = self.frenet_optimal_planning(f_state, other_actors, target_speed=target_speed)
-        self.path = fplist[best_path_idx]
-        # print('trajectory planning time: {} s'.format(time.time() - t0))
-        return self.path, fplist, best_path_idx
+        print(f_state)
+
+        # # Frenet motion planning
+        # best_path_idx, fplist = self.frenet_optimal_planning(f_state, other_actors, target_speed=target_speed)
+        # self.path = fplist[best_path_idx]
+        # # print('trajectory planning time: {} s'.format(time.time() - t0))
+        # return self.path, fplist, best_path_idx
 
     def run_step_single_path(self, ego_state, idx, df_n=0, Tf=4, Vf_n=0):
         """

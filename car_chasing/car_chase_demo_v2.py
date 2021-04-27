@@ -47,6 +47,8 @@ from frenet_optimal_trajectory import FrenetPlanner as MotionPlanner
 
 import imageio
 from copy import deepcopy
+
+
 def draw_image(surface, image, image2, location1, location2, blend=False, record=False,driveName='',smazat=[]):
     if record:
         driveName = driveName.split('/')[1]
@@ -105,6 +107,19 @@ def process_img(image):
     # cv2.imshow("", i3)
     # cv2.waitKey(1)
     return i3
+
+
+def get_speed(vehicle):
+    """
+    Compute speed of a vehicle in Kmh
+    :param vehicle: the vehicle for which speed is calculated
+    :return: speed as a float in Kmh
+    """
+    vel = vehicle.get_velocity()
+    # return 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # 3.6 * meter per seconds = kmh
+    return math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # meter per seconds
+
+
 
 # New Classes
 class Evaluation():
@@ -297,8 +312,50 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         
         # Set up local planner and behavnioural planner
         # --------------------------------------------------------------
+        # generate and save global route if it does not exist in the road_maps folder
+        global_route = np.empty((0, 3))
+
+        print("Saving global_route...")
+
+        distance = 1
+        for i in range(len(evaluation.history)): #range(1520):
+
+            tmp = evaluation.history[i]
+
+            wp = carla.Transform(carla.Location(tmp[0] ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+
+            # wp2 = world.get_map().get_waypoint(carla.Location(x=406, y=-100, z=0.1),
+            #                                                 project_to_road=True).next(distance=distance)[0]
+            # print("wp: ", wp)
+            # print("wp2: ", wp2)
+
+            distance += 2
+            global_route = np.append(global_route,
+                                            [[wp.location.x, wp.location.y,
+                                            wp.location.z]], axis=0)
+        #     # To visualize point clouds
+        #     self.world_module.points_to_draw['wp {}'.format(wp.id)] = [wp.transform.location, 'COLOR_CHAMELEON_0']
+        np.save('./road_maps/global_route_town05', global_route)
+
+        print("Done saving global_route")
+
+
+        init_s = 50
+        init_d = 0 * 3.5 # self.LANE_WIDTH # reset can be np.random.randint(-1, 3) * self.LANE_WIDTH
+
         motionPlanner = MotionPlanner()
+
+
+        # Start Modules
+        motionPlanner.start(global_route)
+        motionPlanner.reset(init_s, init_d, df_n=0, Tf=4, Vf_n=0, optimal_path=False)
+        # self.world_module.update_global_route_csp(motionPlanner.csp)
+        # self.traffic_module.update_global_route_csp(motionPlanner.csp)
+        # self.module_manager.start_modules()
+
         f_idx = 0
+        f_state = [init_s, init_d, 0, 0, 0, 0]
+
         # --------------------------------------------------------------
 
 
@@ -316,6 +373,9 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                                                 # frequency). Must be a natural
                                                 # number.
 
+
+        actors_batch = []
+        
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
             while True:
@@ -426,7 +486,10 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                     # Adding obsticle_vehicle to actors_batch
                     los_sensor = LineOfSightSensor(obsticle_vehicle)
 
+                    target_speed = get_speed(obsticle_vehicle)
+                    # cruiseControl = CruiseControl(obsticle_vehicle, los_sensor, self.module_manager, targetSpeed=targetSpeed)
 
+                    # actors_batch.append({'Actor': obsticle_vehicle, 'Sensor': los_sensor, 'Cruise Control': cruiseControl, 'Frenet State': [s, d]})
 
 
                 # if frame % LP_FREQUENCY_DIVISOR == 0:
@@ -438,30 +501,23 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                         **********************************************************************************************************************
                 """
 
-                def get_speed(vehicle):
-                    """
-                    Compute speed of a vehicle in Kmh
-                    :param vehicle: the vehicle for which speed is calculated
-                    :return: speed as a float in Kmh
-                    """
-                    vel = vehicle.get_velocity()
-                    # return 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # 3.6 * meter per seconds = kmh
-                    return math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # meter per seconds
-
-
                 max_s = 3000 #int(cfg.CARLA.MAX_S)
                 targetSpeed = 13.89
 
-                temp = [vehicle.get_velocity(),vehicle.get_acceleration()]
-                speed = get_speed(vehicle)
-                acc_vec = vehicle.get_acceleration()
+                temp = [vehicleToFollow.get_velocity(),vehicleToFollow.get_acceleration()]
+                speed = get_speed(vehicleToFollow)
+                acc_vec = vehicleToFollow.get_acceleration()
                 acc = math.sqrt(acc_vec.x ** 2 + acc_vec.y ** 2 + acc_vec.z ** 2)
-                psi = math.radians(vehicle.get_transform().rotation.yaw)
-                ego_state = [vehicle.get_location().x, vehicle.get_location().y, speed, acc, psi, temp,max_s]
-                # fpath = self.motionPlanner.run_step_single_path(ego_state, self.f_idx, df_n=action[0], Tf=5, Vf_n=action[1])
+                psi = math.radians(vehicleToFollow.get_transform().rotation.yaw)
+                ego_state = [vehicleToFollow.get_location().x, vehicleToFollow.get_location().y, speed, acc, psi, temp,max_s]
+
+
+                motionPlanner.run_step(ego_state, f_idx, None, target_speed=targetSpeed)
+                
+                # # fpath = self.motionPlanner.run_step_single_path(ego_state, self.f_idx, df_n=action[0], Tf=5, Vf_n=action[1])
                 # fpath, fplist, best_path_idx = motionPlanner.run_step(ego_state, f_idx, self.traffic_module.actors_batch, target_speed=targetSpeed)
-                # wps_to_go = len(fpath.t) - 3    # -2 bc len gives # of items not the idx of last item + 2wp controller is used
-                # f_idx = 1
+                # # wps_to_go = len(fpath.t) - 3    # -2 bc len gives # of items not the idx of last item + 2wp controller is used
+                # # f_idx = 1
 
 
                 tmp = evaluation.history[counter-1]

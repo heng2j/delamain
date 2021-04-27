@@ -80,7 +80,6 @@ def cfg_from_yaml_file(cfg_file, config):
 
 # TODO - May need to fix config input
 cfg = EasyDict()
-print("Path: ", (Path(__file__).resolve().parent / '../car_chasing/cfgs/config.yaml').resolve())
 cfg.ROOT_DIR =  (Path(__file__).resolve().parent / '../car_chasing/cfgs').resolve()
 cfg.LOCAL_RANK = 0
 cfg_file =  (Path(__file__).resolve().parent / '../car_chasing/cfgs/config.yaml').resolve()
