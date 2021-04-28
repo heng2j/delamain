@@ -290,7 +290,7 @@ class FrenetPlanner:
         # ------------------------ UPDATE S VALUE ------------------------------------ #
         # We calculate normal vector of s line and find error_s based on ego location. Note: This assumes error is small angle
         def update_s(current_s):
-            # print("current_s: ", current_s)
+            print("current_s: ", current_s)
             s_yaw = self.csp.calc_yaw(current_s)
             s_x, s_y, s_z = self.csp.calc_position(current_s)
             # print("current_s: ", current_s)
@@ -305,9 +305,10 @@ class FrenetPlanner:
             return delta_s
 
         estimated_s = self.path.s[idx] % ego_state[6]
+        # print("self.path.s[idx]: ", self.path.s[idx])
+        # print("1st update estimated_s: ", estimated_s)
         estimated_s -= update_s(estimated_s)
         estimated_s = estimated_s  % ego_state[6]
-        # print("estimated_s: ", estimated_s)
         estimated_s += update_s(estimated_s)
         estimated_s = estimated_s % ego_state[6]
 
@@ -382,15 +383,19 @@ class FrenetPlanner:
                     ld_min = s_diff
                     sur_actos['Left Down']['Exist'] = True
                     sur_actos['Left Down']['Frenet State'] = [s_, d_]
-                    sur_actos['Left Down']['Speed'] = actor['Cruise Control'].speed
-                    sur_actos['Left Down']['Target Speed'] = actor['Cruise Control'].targetSpeed
+                    sur_actos['Left Down']['Speed'] = actor['Speed']
+                    sur_actos['Left Down']['Target Speed'] = actor['TargetSpeed']
+                    # sur_actos['Left Down']['Speed'] = actor['Cruise Control'].speed
+                    # sur_actos['Left Down']['Target Speed'] = actor['Cruise Control'].targetSpeed
                 # up
                 elif s_diff < 0 and abs(s_diff) < lu_min:
                     lu_min = abs(s_diff)
                     sur_actos['Left Up']['Exist'] = True
                     sur_actos['Left Up']['Frenet State'] = [s_, d_]
-                    sur_actos['Left Up']['Speed'] = actor['Cruise Control'].speed
-                    sur_actos['Left Up']['Target Speed'] = actor['Cruise Control'].targetSpeed
+                    sur_actos['Left Up']['Speed'] = actor['Speed']
+                    sur_actos['Left Up']['Target Speed'] = actor['TargetSpeed']
+                    # sur_actos['Left Up']['Speed'] = actor['Cruise Control'].speed
+                    # sur_actos['Left Up']['Target Speed'] = actor['Cruise Control'].targetSpeed
 
             # current lane
             elif lane_ == lane:
@@ -399,15 +404,19 @@ class FrenetPlanner:
                     cd_min = s_diff
                     sur_actos['Center Down']['Exist'] = True
                     sur_actos['Center Down']['Frenet State'] = [s_, d_]
-                    sur_actos['Center Down']['Speed'] = actor['Cruise Control'].speed
-                    sur_actos['Center Down']['Target Speed'] = actor['Cruise Control'].targetSpeed
+                    sur_actos['Center Down']['Speed'] = actor['Speed']
+                    sur_actos['Center Down']['Target Speed'] =  actor['TargetSpeed']
+                    # sur_actos['Center Down']['Speed'] = actor['Cruise Control'].speed
+                    # sur_actos['Center Down']['Target Speed'] = actor['Cruise Control'].targetSpeed
                 # up
                 elif s_diff < 0 and s_diff < cu_min:
                     cd_min = s_diff
                     sur_actos['Center Up']['Exist'] = True
                     sur_actos['Center Up']['Frenet State'] = [s_, d_]
-                    sur_actos['Center Up']['Speed'] = actor['Cruise Control'].speed
-                    sur_actos['Center Up']['Target Speed'] = actor['Cruise Control'].targetSpeed
+                    sur_actos['Center Up']['Speed'] = actor['Speed']
+                    sur_actos['Center Up']['Target Speed'] = actor['TargetSpeed']
+                    # sur_actos['Center Up']['Speed'] = actor['Cruise Control'].speed
+                    # sur_actos['Center Up']['Target Speed'] = actor['Cruise Control'].targetSpeed
 
             # right
             elif lane_ == lane + 1:
@@ -416,15 +425,19 @@ class FrenetPlanner:
                     rd_min = s_diff
                     sur_actos['Right Down']['Exist'] = True
                     sur_actos['Right Down']['Frenet State'] = [s_, d_]
-                    sur_actos['Right Down']['Speed'] = actor['Cruise Control'].speed
-                    sur_actos['Right Down']['Target Speed'] = actor['Cruise Control'].targetSpeed
+                    sur_actos['Right Down']['Speed'] =  actor['Speed']
+                    sur_actos['Right Down']['Target Speed'] = actor['TargetSpeed']
+                    # sur_actos['Right Down']['Speed'] = actor['Cruise Control'].speed
+                    # sur_actos['Right Down']['Target Speed'] = actor['Cruise Control'].targetSpeed
                 # up
                 elif s_diff < 0 and abs(s_diff) < ru_min:
                     ru_min = abs(s_diff)
                     sur_actos['Right Up']['Exist'] = True
                     sur_actos['Right Up']['Frenet State'] = [s_, d_]
-                    sur_actos['Right Up']['Speed'] = actor['Cruise Control'].speed
-                    sur_actos['Right Up']['Target Speed'] = actor['Cruise Control'].targetSpeed
+                    sur_actos['Right Up']['Speed'] =  actor['Speed']
+                    sur_actos['Right Up']['Target Speed'] =  actor['TargetSpeed']
+                    # sur_actos['Right Up']['Speed'] = actor['Cruise Control'].speed
+                    # sur_actos['Right Up']['Target Speed'] = actor['Cruise Control'].targetSpeed
 
         # for k, v in sur_actos.items():
         #     act = v['actor']
@@ -796,10 +809,14 @@ class FrenetPlanner:
         fplist = self.calc_curvature_paths(fplist)
         fplist = self.check_paths(fplist)
 
+        print("fplist: ", fplist)
+        
+
         # find minimum cost path
         mincost = float("inf")
         bestpath_idx = None
         for i, fp in enumerate(fplist):
+            print("fp.cf: ", fp.cf)
             if mincost >= fp.cf:
                 mincost = fp.cf
                 bestpath_idx = i
@@ -837,11 +854,11 @@ class FrenetPlanner:
 
         print(f_state)
 
-        # # Frenet motion planning
-        # best_path_idx, fplist = self.frenet_optimal_planning(f_state, other_actors, target_speed=target_speed)
-        # self.path = fplist[best_path_idx]
-        # # print('trajectory planning time: {} s'.format(time.time() - t0))
-        # return self.path, fplist, best_path_idx
+        # Frenet motion planning
+        best_path_idx, fplist = self.frenet_optimal_planning(f_state, other_actors, target_speed=target_speed)
+        self.path = fplist[best_path_idx]
+        # print('trajectory planning time: {} s'.format(time.time() - t0))
+        return self.path, fplist, best_path_idx
 
     def run_step_single_path(self, ego_state, idx, df_n=0, Tf=4, Vf_n=0):
         """

@@ -29,7 +29,7 @@ from util.carla_util import carla_vec_to_np_array, carla_img_to_array, CarlaSync
 from util.geometry_util import dist_point_linestring
 
 
-# For birdeye view 
+# For birdeye view
 from carla_birdeye_view import (
     BirdViewProducer,
     BirdView,
@@ -40,10 +40,11 @@ from carla_birdeye_view import (
 from carla_birdeye_view.mask import PixelDimensions
 
 # For planners
-from object_avoidance import local_planner 
-from object_avoidance import behavioural_planner 
+from object_avoidance import local_planner
+from object_avoidance import behavioural_planner
 
 from frenet_optimal_trajectory import FrenetPlanner as MotionPlanner
+from cubic_spline_planner import *
 
 import imageio
 from copy import deepcopy
@@ -77,19 +78,6 @@ def DrawDrivable(indexes, w, h, display):
                     pygame.draw.line(display, BB_COLOR,  (j*w,i*h+h), (j*w+w,i*h+h))
 
 
-def get_trajectory_from_lane_detector(ld, image):
-    """
-    param: ld = lane detector
-    image: windshield rgb cam
-    return: traj
-    """
-    image_arr = carla_img_to_array(image)
-    poly_left, poly_right = ld(image_arr)
-    x = np.arange(-2,60,1.0)
-    y = -0.5*(poly_left(x)+poly_right(x))
-    x += 0.5
-    traj = np.stack((x,y)).T
-    return traj
 
 def send_control(vehicle, throttle, steer, brake,
                  hand_brake=False, reverse=False):
@@ -98,15 +86,6 @@ def send_control(vehicle, throttle, steer, brake,
     brake = np.clip(brake, 0.0, 1.0)
     control = carla.VehicleControl(throttle, steer, brake, hand_brake, reverse)
     vehicle.apply_control(control)
-
-def process_img(image):
-    i = np.array(image.raw_data)
-    i2 = i.reshape((512, 1024, 4))
-    i3 = i2[:, :, :3]
-    # image.save_to_disk('data/image_%s.png' % image.timestamp)
-    # cv2.imshow("", i3)
-    # cv2.waitKey(1)
-    return i3
 
 
 def get_speed(vehicle):
@@ -232,9 +211,10 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
     actor_list = []
     pygame.init()
 
-    display = pygame.display.set_mode(
-        (800, 600),
-        pygame.HWSURFACE | pygame.DOUBLEBUF)
+    # Comment out for not displaying pygame window
+    # display = pygame.display.set_mode(
+    #     (800, 600),
+    #     pygame.HWSURFACE | pygame.DOUBLEBUF)
     font = get_font()
     clock = pygame.time.Clock()
 
@@ -288,7 +268,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         collision_sensor.listen(lambda event: evaluation.CollisionHandler(event))
         actor_list.append(collision_sensor)
 
-        
         # front cam for object detection
         camera_rgb_blueprint = world.get_blueprint_library().find('sensor.camera.rgb')
         camera_rgb_blueprint.set_attribute('fov', '90')
@@ -299,7 +278,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         actor_list.append(camera_rgb)
         sensors.append(camera_rgb)
 
-            
         # segmentation camera
         camera_segmentation = world.spawn_actor(
             blueprint_library.find('sensor.camera.semantic_segmentation'),
@@ -309,7 +287,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         sensors.append(camera_segmentation)
 
 
-        
         # Set up local planner and behavnioural planner
         # --------------------------------------------------------------
         # generate and save global route if it does not exist in the road_maps folder
@@ -318,16 +295,12 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         print("Saving global_route...")
 
         distance = 1
-        for i in range(len(evaluation.history)): #range(1520):
+        for p in evaluation.history: #range(1520):
 
-            tmp = evaluation.history[i]
-
-            wp = carla.Transform(carla.Location(tmp[0] ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+            wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
 
             # wp2 = world.get_map().get_waypoint(carla.Location(x=406, y=-100, z=0.1),
             #                                                 project_to_road=True).next(distance=distance)[0]
-            # print("wp: ", wp)
-            # print("wp2: ", wp2)
 
             distance += 2
             global_route = np.append(global_route,
@@ -349,6 +322,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         # Start Modules
         motionPlanner.start(global_route)
         motionPlanner.reset(init_s, init_d, df_n=0, Tf=4, Vf_n=0, optimal_path=False)
+
         # self.world_module.update_global_route_csp(motionPlanner.csp)
         # self.traffic_module.update_global_route_csp(motionPlanner.csp)
         # self.module_manager.start_modules()
@@ -375,6 +349,33 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
 
         actors_batch = []
+
+
+
+        # Add frenet parameters
+
+
+        # wx = []
+        # wy = []
+        
+        # for p in evaluation.history:
+        #     wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
+        #     wx.append(wp.location.x)
+        #     wy.append(wp.location.y)
+        
+                
+        # tx, ty, tyaw, tc, csp = generate_target_course(wx, wy)
+
+
+        # # initial state
+        # c_speed = 10.0 / 3.6  # current speed [m/s]
+        # c_d = 2.0  # current lateral position [m]
+        # c_d_d = 0.0  # current lateral speed [m/s]
+        # c_d_dd = 0.0  # current latral acceleration [m/s]
+        # s0 = 0.0  # current course position    
+        
+
+                
         
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
@@ -405,11 +406,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 carInTheImage = semantic.IsThereACarInThePicture(image_segmentation)
 
                 line = []
-
-
-
-
-
 
                 # Spawn a vehicle to follow
                 if not vehicleToFollowSpawned and followDrivenPath:
@@ -487,12 +483,24 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                     los_sensor = LineOfSightSensor(obsticle_vehicle)
 
                     target_speed = get_speed(obsticle_vehicle)
+
+                    # Get S and D for obsticle_vehicle
+
+
+
+
                     # cruiseControl = CruiseControl(obsticle_vehicle, los_sensor, self.module_manager, targetSpeed=targetSpeed)
 
                     # actors_batch.append({'Actor': obsticle_vehicle, 'Sensor': los_sensor, 'Cruise Control': cruiseControl, 'Frenet State': [s, d]})
 
 
                 # if frame % LP_FREQUENCY_DIVISOR == 0:
+
+
+                tmp = evaluation.history[counter-1]
+                currentPos = carla.Transform(carla.Location(tmp[0] + 0 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+                vehicleToFollow.set_transform(currentPos)
+
 
 
                 """
@@ -512,7 +520,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 ego_state = [vehicleToFollow.get_location().x, vehicleToFollow.get_location().y, speed, acc, psi, temp,max_s]
 
 
-                motionPlanner.run_step(ego_state, f_idx, None, target_speed=targetSpeed)
+                # motionPlanner.run_step(ego_state, f_idx, None, target_speed=targetSpeed)
                 
                 # # fpath = self.motionPlanner.run_step_single_path(ego_state, self.f_idx, df_n=action[0], Tf=5, Vf_n=action[1])
                 # fpath, fplist, best_path_idx = motionPlanner.run_step(ego_state, f_idx, self.traffic_module.actors_batch, target_speed=targetSpeed)
@@ -520,9 +528,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # # f_idx = 1
 
 
-                tmp = evaluation.history[counter-1]
-                currentPos = carla.Transform(carla.Location(tmp[0] + 0 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
-                vehicleToFollow.set_transform(currentPos)
+
+
 
 
                 # --------------------------------------------------------------
@@ -559,16 +566,16 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                 # Draw the display.
                 # draw_image(display, image_rgb)
-                draw_image(display, img_rgb, image_segmentation,location1, location2,record=record,driveName=driveName,smazat=line)
-                display.blit(
-                    font.render('     FPS (real) % 5d ' % clock.get_fps(), True, (255, 255, 255)),
-                    (8, 10))
-                display.blit(
-                    font.render('     FPS (simulated): % 5d ' % fps, True, (255, 255, 255)),
-                    (8, 28))
-                display.blit(
-                    font.render('     speed: {:.2f} m/s'.format(speed), True, (255, 255, 255)),
-                    (8, 46))
+                # draw_image(display, img_rgb, image_segmentation,location1, location2,record=record,driveName=driveName,smazat=line)
+                # display.blit(
+                #     font.render('     FPS (real) % 5d ' % clock.get_fps(), True, (255, 255, 255)),
+                #     (8, 10))
+                # display.blit(
+                #     font.render('     FPS (simulated): % 5d ' % fps, True, (255, 255, 255)),
+                #     (8, 28))
+                # display.blit(
+                #     font.render('     speed: {:.2f} m/s'.format(speed), True, (255, 255, 255)),
+                #     (8, 46))
                 # display.blit(
                 #     font.render('     cross track error: {:03d} cm'.format(cross_track_error), True, (255, 255, 255)),
                 #     (8, 64))
@@ -600,7 +607,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                 # # DrawDrivable(drivableIndexes, image_segmentation.width // 10, image_segmentation.height // 10, display)
 
-
+                print("vehicleToFollow.get_transform()", vehicleToFollow.get_transform())
 
                 # pygame.display.flip()
 

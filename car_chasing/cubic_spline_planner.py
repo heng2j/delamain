@@ -65,7 +65,8 @@ class Spline:
 
         if t is outside of the input x, return None
         """
-
+        # print("self.x[0]: ", self.x[0])
+        # print("self.x[-1]: ", self.x[-1])
         if t < self.x[0]:
             return None
         elif t > self.x[-1]:
