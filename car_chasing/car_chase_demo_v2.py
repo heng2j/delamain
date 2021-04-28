@@ -208,7 +208,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
     # New Variables
     extrapolate = True
-    optimalDistance = 8
+    optimalDistance = 1
     followDrivenPath = True
     evaluateChasingCar = True
     record = False
