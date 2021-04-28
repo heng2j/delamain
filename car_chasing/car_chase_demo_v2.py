@@ -352,7 +352,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
 
         # initial state
-        c_speed = 10.0 / 3.6  # current speed [m/s]
+        c_speed = 2.0 / 3.6  # current speed [m/s]
         c_d = 2.0  # current lateral position [m]
         c_d_d = 0.0  # current lateral speed [m/s]
         c_d_dd = 0.0  # current latral acceleration [m/s]
@@ -503,14 +503,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 
                 # Set up  new locationss
                 location1 = vehicle.get_transform()
-                location2 = vehicleToFollow.get_transform()
-
-                
-
-                # Update vehicle position by detecting vehicle to follow position
-                newX, newY = carDetector.CreatePointInFrontOFCar(location1.location.x, location1.location.y,location1.rotation.yaw)
-                angle = carDetector.getAngle([location1.location.x, location1.location.y], [newX, newY],
-                                             [location2.location.x, location2.location.y])
+                location2 = vehicleToFollow.get_transform()      
 
                 possibleAngle = 0
                 drivableIndexes = []
