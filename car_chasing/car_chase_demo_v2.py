@@ -29,7 +29,7 @@ from util.carla_util import carla_vec_to_np_array, carla_img_to_array, CarlaSync
 from util.geometry_util import dist_point_linestring
 
 
-# For birdeye view
+# For birdeye view 
 from carla_birdeye_view import (
     BirdViewProducer,
     BirdView,
@@ -40,16 +40,17 @@ from carla_birdeye_view import (
 from carla_birdeye_view.mask import PixelDimensions
 
 # For planners
-from object_avoidance import local_planner
-from object_avoidance import behavioural_planner
+from object_avoidance import local_planner 
+from object_avoidance import behavioural_planner 
 
 from frenet_optimal_trajectory import FrenetPlanner as MotionPlanner
-from cubic_spline_planner import *
+
+
+# For Object avoidance
+from frenet_planer import *
 
 import imageio
 from copy import deepcopy
-
-
 def draw_image(surface, image, image2, location1, location2, blend=False, record=False,driveName='',smazat=[]):
     if record:
         driveName = driveName.split('/')[1]
@@ -78,6 +79,19 @@ def DrawDrivable(indexes, w, h, display):
                     pygame.draw.line(display, BB_COLOR,  (j*w,i*h+h), (j*w+w,i*h+h))
 
 
+def get_trajectory_from_lane_detector(ld, image):
+    """
+    param: ld = lane detector
+    image: windshield rgb cam
+    return: traj
+    """
+    image_arr = carla_img_to_array(image)
+    poly_left, poly_right = ld(image_arr)
+    x = np.arange(-2,60,1.0)
+    y = -0.5*(poly_left(x)+poly_right(x))
+    x += 0.5
+    traj = np.stack((x,y)).T
+    return traj
 
 def send_control(vehicle, throttle, steer, brake,
                  hand_brake=False, reverse=False):
@@ -87,18 +101,14 @@ def send_control(vehicle, throttle, steer, brake,
     control = carla.VehicleControl(throttle, steer, brake, hand_brake, reverse)
     vehicle.apply_control(control)
 
-
-def get_speed(vehicle):
-    """
-    Compute speed of a vehicle in Kmh
-    :param vehicle: the vehicle for which speed is calculated
-    :return: speed as a float in Kmh
-    """
-    vel = vehicle.get_velocity()
-    # return 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # 3.6 * meter per seconds = kmh
-    return math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # meter per seconds
-
-
+def process_img(image):
+    i = np.array(image.raw_data)
+    i2 = i.reshape((512, 1024, 4))
+    i3 = i2[:, :, :3]
+    # image.save_to_disk('data/image_%s.png' % image.timestamp)
+    # cv2.imshow("", i3)
+    # cv2.waitKey(1)
+    return i3
 
 # New Classes
 class Evaluation():
@@ -129,46 +139,56 @@ class Evaluation():
         self.n_of_collisions += 1
 
 
-class LineOfSightSensor(object):
-    def __init__(self, parent_actor):
-        self.sensor = None
-        self.distance = None
-        self.vehicle_ahead = None
-        self._parent = parent_actor
-        # self.sensor_transform = carla.Transform(carla.Location(x=4, z=1.7), carla.Rotation(yaw=0)) # Put this sensor on the windshield of the car.
-        world = self._parent.get_world()
-        bp = world.get_blueprint_library().find('sensor.other.obstacle')
-        bp.set_attribute('distance', '200')
-        bp.set_attribute('hit_radius', '0.5')
-        bp.set_attribute('only_dynamics', 'True')
-        bp.set_attribute('debug_linetrace', 'True')
-        bp.set_attribute('sensor_tick', '0.0')
-        self.sensor = world.spawn_actor(bp, carla.Transform(), attach_to=self._parent)
-        weak_self = weakref.ref(self)
-        self.sensor.listen(lambda event: LineOfSightSensor._on_los(weak_self, event))
+# class LineOfSightSensor(object):
+#     def __init__(self, parent_actor):
+#         self.sensor = None
+#         self.distance = None
+#         self.vehicle_ahead = None
+#         self._parent = parent_actor
+#         # self.sensor_transform = carla.Transform(carla.Location(x=4, z=1.7), carla.Rotation(yaw=0)) # Put this sensor on the windshield of the car.
+#         world = self._parent.get_world()
+#         bp = world.get_blueprint_library().find('sensor.other.obstacle')
+#         bp.set_attribute('distance', '200')
+#         bp.set_attribute('hit_radius', '0.5')
+#         bp.set_attribute('only_dynamics', 'True')
+#         bp.set_attribute('debug_linetrace', 'True')
+#         bp.set_attribute('sensor_tick', '0.0')
+#         self.sensor = world.spawn_actor(bp, carla.Transform(), attach_to=self._parent)
+#         weak_self = weakref.ref(self)
+#         self.sensor.listen(lambda event: LineOfSightSensor._on_los(weak_self, event))
 
-    def reset(self):
-        self.vehicle_ahead = None
-        self.distance = None
+#     def reset(self):
+#         self.vehicle_ahead = None
+#         self.distance = None
 
-    def destroy(self):
-        self.sensor.destroy()
+#     def destroy(self):
+#         self.sensor.destroy()
 
-    def get_vehicle_ahead(self):
-        return self.vehicle_ahead
+#     def get_vehicle_ahead(self):
+#         return self.vehicle_ahead
 
-    # Only works for CARLA 9.6 and above!
-    def get_los_distance(self):
-        return self.distance
+#     # Only works for CARLA 9.6 and above!
+#     def get_los_distance(self):
+#         return self.distance
 
-    @staticmethod
-    def _on_los(weak_self, event):
-        self = weak_self()
-        if not self:
-            return
-        self.vehicle_ahead = event.other_actor
-        self.distance = event.distance
+#     @staticmethod
+#     def _on_los(weak_self, event):
+#         self = weak_self()
+#         if not self:
+#             return
+#         self.vehicle_ahead = event.other_actor
+#         self.distance = event.distance
 
+
+def get_speed(vehicle):
+    """
+    Compute speed of a vehicle in Kmh
+    :param vehicle: the vehicle for which speed is calculated
+    :return: speed as a float in Kmh
+    """
+    vel = vehicle.get_velocity()
+    # return 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # 3.6 * meter per seconds = kmh
+    return math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # meter per seconds
 
 
 
@@ -211,10 +231,9 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
     actor_list = []
     pygame.init()
 
-    # Comment out for not displaying pygame window
-    # display = pygame.display.set_mode(
-    #     (800, 600),
-    #     pygame.HWSURFACE | pygame.DOUBLEBUF)
+    display = pygame.display.set_mode(
+        (800, 600),
+        pygame.HWSURFACE | pygame.DOUBLEBUF)
     font = get_font()
     clock = pygame.time.Clock()
 
@@ -268,6 +287,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         collision_sensor.listen(lambda event: evaluation.CollisionHandler(event))
         actor_list.append(collision_sensor)
 
+        
         # front cam for object detection
         camera_rgb_blueprint = world.get_blueprint_library().find('sensor.camera.rgb')
         camera_rgb_blueprint.set_attribute('fov', '90')
@@ -278,6 +298,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         actor_list.append(camera_rgb)
         sensors.append(camera_rgb)
 
+            
         # segmentation camera
         camera_segmentation = world.spawn_actor(
             blueprint_library.find('sensor.camera.semantic_segmentation'),
@@ -287,48 +308,9 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         sensors.append(camera_segmentation)
 
 
+        
         # Set up local planner and behavnioural planner
         # --------------------------------------------------------------
-        # generate and save global route if it does not exist in the road_maps folder
-        global_route = np.empty((0, 3))
-
-        print("Saving global_route...")
-
-        distance = 1
-        for p in evaluation.history: #range(1520):
-
-            wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
-
-            # wp2 = world.get_map().get_waypoint(carla.Location(x=406, y=-100, z=0.1),
-            #                                                 project_to_road=True).next(distance=distance)[0]
-
-            distance += 2
-            global_route = np.append(global_route,
-                                            [[wp.location.x, wp.location.y,
-                                            wp.location.z]], axis=0)
-        #     # To visualize point clouds
-        #     self.world_module.points_to_draw['wp {}'.format(wp.id)] = [wp.transform.location, 'COLOR_CHAMELEON_0']
-        np.save('./road_maps/global_route_town05', global_route)
-
-        print("Done saving global_route")
-
-
-        init_s = 50
-        init_d = 0 * 3.5 # self.LANE_WIDTH # reset can be np.random.randint(-1, 3) * self.LANE_WIDTH
-
-        motionPlanner = MotionPlanner()
-
-
-        # Start Modules
-        motionPlanner.start(global_route)
-        motionPlanner.reset(init_s, init_d, df_n=0, Tf=4, Vf_n=0, optimal_path=False)
-
-        # self.world_module.update_global_route_csp(motionPlanner.csp)
-        # self.traffic_module.update_global_route_csp(motionPlanner.csp)
-        # self.module_manager.start_modules()
-
-        f_idx = 0
-        f_state = [init_s, init_d, 0, 0, 0, 0]
 
         # --------------------------------------------------------------
 
@@ -347,36 +329,39 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                                                 # frequency). Must be a natural
                                                 # number.
 
+        # TMP obstacle lists
+        ob = np.array([[233.980630, 130.523910],
+                        [233.980630, 30.523910],
+                        [233.980630, 60.523910],
+                        [233.980630, 80.523910],
+                        [233.786942, 75.530586],
+                        ])
 
-        actors_batch = []
+        wx = []
+        wy = []
+        wz = []
+
+        for p in evaluation.history:
+            wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
+            wx.append(wp.location.x)
+            wy.append(wp.location.y)
+            wz.append(wp.location.z)
 
 
+        tx, ty, tyaw, tc, csp = generate_target_course(wx, wy, wz)
 
-        # Add frenet parameters
 
-
-        # wx = []
-        # wy = []
+        # initial state
+        c_speed = 10.0 / 3.6  # current speed [m/s]
+        c_d = 2.0  # current lateral position [m]
+        c_d_d = 0.0  # current lateral speed [m/s]
+        c_d_dd = 0.0  # current latral acceleration [m/s]
+        s0 = 0.0  # current course position    
         
-        # for p in evaluation.history:
-        #     wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
-        #     wx.append(wp.location.x)
-        #     wy.append(wp.location.y)
-        
-                
-        # tx, ty, tyaw, tc, csp = generate_target_course(wx, wy)
 
 
-        # # initial state
-        # c_speed = 10.0 / 3.6  # current speed [m/s]
-        # c_d = 2.0  # current lateral position [m]
-        # c_d_d = 0.0  # current lateral speed [m/s]
-        # c_d_dd = 0.0  # current latral acceleration [m/s]
-        # s0 = 0.0  # current course position    
-        
 
-                
-        
+
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
             while True:
@@ -406,6 +391,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 carInTheImage = semantic.IsThereACarInThePicture(image_segmentation)
 
                 line = []
+
 
                 # Spawn a vehicle to follow
                 if not vehicleToFollowSpawned and followDrivenPath:
@@ -479,28 +465,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                     actor_list.append(obsticle_vehicle)
                     obsticle_vehicle.set_simulate_physics(True)
 
-                    # Adding obsticle_vehicle to actors_batch
-                    los_sensor = LineOfSightSensor(obsticle_vehicle)
-
-                    target_speed = get_speed(obsticle_vehicle)
-
-                    # Get S and D for obsticle_vehicle
-
-
-
-
-                    # cruiseControl = CruiseControl(obsticle_vehicle, los_sensor, self.module_manager, targetSpeed=targetSpeed)
-
-                    # actors_batch.append({'Actor': obsticle_vehicle, 'Sensor': los_sensor, 'Cruise Control': cruiseControl, 'Frenet State': [s, d]})
-
 
                 # if frame % LP_FREQUENCY_DIVISOR == 0:
-
-
-                tmp = evaluation.history[counter-1]
-                currentPos = carla.Transform(carla.Location(tmp[0] + 0 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
-                vehicleToFollow.set_transform(currentPos)
-
 
 
                 """
@@ -509,31 +475,37 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                         **********************************************************************************************************************
                 """
 
-                max_s = 3000 #int(cfg.CARLA.MAX_S)
-                targetSpeed = 13.89
 
-                temp = [vehicleToFollow.get_velocity(),vehicleToFollow.get_acceleration()]
-                speed = get_speed(vehicleToFollow)
-                acc_vec = vehicleToFollow.get_acceleration()
-                acc = math.sqrt(acc_vec.x ** 2 + acc_vec.y ** 2 + acc_vec.z ** 2)
-                psi = math.radians(vehicleToFollow.get_transform().rotation.yaw)
-                ego_state = [vehicleToFollow.get_location().x, vehicleToFollow.get_location().y, speed, acc, psi, temp,max_s]
+                # tmp = evaluation.history[counter-1]
+                # currentPos = carla.Transform(carla.Location(tmp[0] + 0 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+                # vehicleToFollow.set_transform(currentPos)
 
 
-                # motionPlanner.run_step(ego_state, f_idx, None, target_speed=targetSpeed)
+
+                # ------------------- Frenet  --------------------------------
+                path = frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob)
                 
-                # # fpath = self.motionPlanner.run_step_single_path(ego_state, self.f_idx, df_n=action[0], Tf=5, Vf_n=action[1])
-                # fpath, fplist, best_path_idx = motionPlanner.run_step(ego_state, f_idx, self.traffic_module.actors_batch, target_speed=targetSpeed)
-                # # wps_to_go = len(fpath.t) - 3    # -2 bc len gives # of items not the idx of last item + 2wp controller is used
-                # # f_idx = 1
+                
+                new_vehicleToFollow_transform = carla.Transform()
+                new_vehicleToFollow_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(path.yaw[1]), roll=0.0) 
+    
+                new_vehicleToFollow_transform.location.x = path.x[1]
+                new_vehicleToFollow_transform.location.y = path.y[1]
+                new_vehicleToFollow_transform.location.z = path.z[1]
+                
+                
+                vehicleToFollow.set_transform(new_vehicleToFollow_transform)
+                
 
 
+                # ------------------- Control for ego  --------------------------------
+                
+                
+                # Set up  new locationss
+                location1 = vehicle.get_transform()
+                location2 = vehicleToFollow.get_transform()
 
-
-
-
-                # --------------------------------------------------------------
-
+                
 
                 # Update vehicle position by detecting vehicle to follow position
                 newX, newY = carDetector.CreatePointInFrontOFCar(location1.location.x, location1.location.y,location1.rotation.yaw)
@@ -566,16 +538,16 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                 # Draw the display.
                 # draw_image(display, image_rgb)
-                # draw_image(display, img_rgb, image_segmentation,location1, location2,record=record,driveName=driveName,smazat=line)
-                # display.blit(
-                #     font.render('     FPS (real) % 5d ' % clock.get_fps(), True, (255, 255, 255)),
-                #     (8, 10))
-                # display.blit(
-                #     font.render('     FPS (simulated): % 5d ' % fps, True, (255, 255, 255)),
-                #     (8, 28))
-                # display.blit(
-                #     font.render('     speed: {:.2f} m/s'.format(speed), True, (255, 255, 255)),
-                #     (8, 46))
+                draw_image(display, img_rgb, image_segmentation,location1, location2,record=record,driveName=driveName,smazat=line)
+                display.blit(
+                    font.render('     FPS (real) % 5d ' % clock.get_fps(), True, (255, 255, 255)),
+                    (8, 10))
+                display.blit(
+                    font.render('     FPS (simulated): % 5d ' % fps, True, (255, 255, 255)),
+                    (8, 28))
+                display.blit(
+                    font.render('     speed: {:.2f} m/s'.format(speed), True, (255, 255, 255)),
+                    (8, 46))
                 # display.blit(
                 #     font.render('     cross track error: {:03d} cm'.format(cross_track_error), True, (255, 255, 255)),
                 #     (8, 64))
@@ -584,35 +556,56 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 #     (8, 82))
 
 
-                # # Draw bbox on following vehicle
-                # if len(bbox) != 0:
-                #     points = [(int(bbox[i, 0]), int(bbox[i, 1])) for i in range(8)]
-                #     BB_COLOR = (248, 64, 24)
-                #     # draw lines
-                #     # base
-                #     pygame.draw.line(display, BB_COLOR, points[0], points[1])
-                #     pygame.draw.line(display, BB_COLOR, points[1], points[2])
-                #     pygame.draw.line(display, BB_COLOR, points[2], points[3])
-                #     pygame.draw.line(display, BB_COLOR, points[3], points[0])
-                #     # top
-                #     pygame.draw.line(display, BB_COLOR, points[4], points[5])
-                #     pygame.draw.line(display, BB_COLOR, points[5], points[6])
-                #     pygame.draw.line(display, BB_COLOR, points[6], points[7])
-                #     pygame.draw.line(display, BB_COLOR, points[7], points[4])
-                #     # base-top
-                #     pygame.draw.line(display, BB_COLOR, points[0], points[4])
-                #     pygame.draw.line(display, BB_COLOR, points[1], points[5])
-                #     pygame.draw.line(display, BB_COLOR, points[2], points[6])
-                #     pygame.draw.line(display, BB_COLOR, points[3], points[7])
+                # Draw bbox on following vehicle
+                if len(bbox) != 0:
+                    points = [(int(bbox[i, 0]), int(bbox[i, 1])) for i in range(8)]
+                    BB_COLOR = (248, 64, 24)
+                    # draw lines
+                    # base
+                    pygame.draw.line(display, BB_COLOR, points[0], points[1])
+                    pygame.draw.line(display, BB_COLOR, points[1], points[2])
+                    pygame.draw.line(display, BB_COLOR, points[2], points[3])
+                    pygame.draw.line(display, BB_COLOR, points[3], points[0])
+                    # top
+                    pygame.draw.line(display, BB_COLOR, points[4], points[5])
+                    pygame.draw.line(display, BB_COLOR, points[5], points[6])
+                    pygame.draw.line(display, BB_COLOR, points[6], points[7])
+                    pygame.draw.line(display, BB_COLOR, points[7], points[4])
+                    # base-top
+                    pygame.draw.line(display, BB_COLOR, points[0], points[4])
+                    pygame.draw.line(display, BB_COLOR, points[1], points[5])
+                    pygame.draw.line(display, BB_COLOR, points[2], points[6])
+                    pygame.draw.line(display, BB_COLOR, points[3], points[7])
 
-                # # DrawDrivable(drivableIndexes, image_segmentation.width // 10, image_segmentation.height // 10, display)
+                # DrawDrivable(drivableIndexes, image_segmentation.width // 10, image_segmentation.height // 10, display)
 
-                print("vehicleToFollow.get_transform()", vehicleToFollow.get_transform())
 
-                # pygame.display.flip()
+
+                pygame.display.flip()
 
 
                 frame += 1
+
+
+                               
+                print("vehicle.get_transform()", vehicle.get_transform())
+
+                print("vehicleToFollow.get_transform()", vehicleToFollow.get_transform())
+
+                print("obsticle_vehicle.get_transform()", obsticle_vehicle.get_transform())
+
+                
+
+                s0 = path.s[1]
+                c_d = path.d[1]
+                c_d_d = path.d_d[1]
+                c_d_dd = path.d_dd[1]
+                c_speed = path.s_d[1]
+
+                print("path.x[1]: ", path.x[1])
+                print("path.y[1]: ", path.y[1])
+                print("s: ", s0)
+
 
         cv2.destroyAllWindows()
 
