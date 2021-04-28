@@ -85,7 +85,7 @@ def game_loop(args):
 
         FPS = 30
         speed, traj = 0, np.array([])
-        time_cycle, cycles = 0.0, 30
+        time_cycle, cycles = 0.0, 15
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
         with CarlaSyncMode(world.world, cam_rgb, fps=FPS) as sync_mode:
@@ -104,14 +104,14 @@ def game_loop(args):
 
                     # ==================================================================
                     # TODO - run features
-                    traj, lane_mask = get_trajectory_from_lane_detector(ld, image_rgb) # stay in lane
-                    # lane_mask = get_lanes(image_rgb, lane_net, lane_algo)
+                    # traj, lane_mask = get_trajectory_from_lane_detector(ld, image_rgb) # stay in lane
+                    lane_mask = get_lanes(image_rgb, lane_net, lane_algo)
                     # cv2.imwrite('carla_scene2.png', image_rgb)
                     # print(len(traj), traj)
 
                     # ==================================================================
                     # Debug data
-                    # debug_view(image_rgb, lane_mask)
+                    debug_view(image_rgb, lane_mask)
                 # PID Control
                 if traj.any():
                     speed = get_speed(world.player)
