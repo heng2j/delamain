@@ -45,7 +45,10 @@ def main():
 
         # Spawn Agent
         transform = carla.Transform(carla.Location(
-            x=121.61898803710938, y=187.5887451171875, z=1.0), carla.Rotation(yaw=180))  # Location in Town02
+            # x=121.61898803710938, y=187.5887451171875, z=1.0), carla.Rotation(yaw=180) # Location in Town02
+            x=130.81553649902344, y=65.8092269897461, z=1.0), carla.Rotation(yaw=-0)  # Location in Town03
+
+        )
         vehicle = world.spawn_actor(bp, transform)
         actor_list.append(vehicle)
         print('created %s' % vehicle.type_id)
@@ -69,7 +72,8 @@ def main():
         current_loc = (gnss_data.loc[0, 'lat'], gnss_data.loc[0, 'lon'], gnss_data.loc[0, 'alt'])
 
         # Fixed Destination (CARLA Location of type x, y, z)
-        destination = (127.02777862548828, 306.4728088378906, 1.0)  # Fixed Location in Town02
+        # destination = (127.02777862548828, 306.4728088378906, 1.0)  # Fixed Location in Town02
+        destination = (-20.639827728271484, -142.1471405029297, 1.0)  # Fixed Location in Town03
 
         # Random Destination (CARLA Location)
         # If choosing this option instead of the fixed destination make sure to
