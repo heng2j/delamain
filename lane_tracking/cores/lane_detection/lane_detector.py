@@ -13,7 +13,7 @@ import segmentation_models_pytorch as smp
 
 
 class LaneDetector():
-    def __init__(self, cam_geom=CameraGeometry(), model_path='best_model.pth',
+    def __init__(self, cam_geom=CameraGeometry(), model_path='best_model_multi_dice_loss.pth',
     encoder = 'efficientnet-b0', encoder_weights = 'imagenet'):
         self.cg = cam_geom
         self.cut_v, self.grid = self.cg.precompute_grid()
@@ -52,11 +52,17 @@ class LaneDetector():
 
 
     def detect(self, img_array):
-        image_tensor = self.to_tensor_func(image=img_array)["image"]
+        image_tensor = self.to_tensor_func(image=img_array[128:,:,:])["image"]
         x_tensor = torch.from_numpy(image_tensor).to(self.device).unsqueeze(0)
         model_output = self.model.predict(x_tensor).cpu().numpy()
-        background, left, right = model_output[0,0,:,:], model_output[0,1,:,:], model_output[0,2,:,:] 
-        return background, left, right
+        background, left, right = model_output[0,0,:,:], model_output[0,1,:,:], model_output[0,2,:,:]
+        left_canvas = np.ones((288,768))
+        left_canvas[128:,:] = left[:]
+        right_canvas = np.ones((288,768))
+        right_canvas[128:,:] = right[:]
+        bg_canvas = np.ones((288,768))
+        bg_canvas[128:,:] = background[:]
+        return bg_canvas, left_canvas, right_canvas
     
     def detect_and_fit(self, img_array):
         bg, left, right = self.detect(img_array)
