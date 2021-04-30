@@ -1,13 +1,3 @@
-# 1 get vehicle location - DONE
-# 2 get destination location - HARDCODED - DONE
-# 3 get closest node to vehicle and also closest node to destination - DONE
-# 4 compute the shortest past and return list of nodes to follow one by one - DONE
-# 5 append to the list the destination location node to ensure it doesn't stop at its closest node - DONE
-# 6 creates visualizer for waypoints in carla environment
-# 7 send info to car control - TODO
-# 8 car drives itself - TODO
-# 9 car arrives at destination - TODO
-
 import carla
 import os
 import math
@@ -19,21 +9,25 @@ import matplotlib.pyplot as plt
 
 
 def gnss_live_location(event):
-    """Get and store the GNSS Measurements.
+    """Get, print, and store the GNSS Measurements.
     :return: Float values of Latitude, and Longitude, and Altitude
     """
+
     latitude = event.latitude  # degrees
     longitude = event.longitude  # degrees
     altitude = event.altitude  # meters
 
     # print("GNSS measure:\n" + str(event) + '\n')  # For full details of measurements incl. frame and timestamp
-    print("latitude:", str(latitude))
-    print("longitude:", str(longitude))
-    print("altitude:", str(altitude), "\n")
+    # print("latitude:", str(latitude))
+    # print("longitude:", str(longitude))
+    # print("altitude:", str(altitude), "\n")
 
-    gnss_location = (latitude, longitude, altitude)
+    df = pd.DataFrame(columns=["lat", "lon", "alt"])
+    data = {'lat': latitude, 'lon': longitude, 'alt': altitude}
+    df = df.append(data, ignore_index=True)
 
-    return gnss_location
+    # saving the dataframe
+    df.to_parquet('GNSS_DATA.parquet')
 
 
 def find_closest_node(node_list, node_array, location):
@@ -56,11 +50,22 @@ def shortest_path(town_map, start_location, end_location):
     @return: dataframe with geolocations of each waypoint
     """
 
+    # Directory name in which the specific town data is
+    directory = town_map + "_data"
+
+    # Edge list file name
+    edge_filename = town_map + "_topology_edge_list.parquet"
+    edge_filepath = os.path.join("gps_nav", directory, edge_filename)
+
     # Grab edge list data
-    edgelist = pd.read_parquet("Town02_data/Town02_topology_edge_list.parquet")  # NEED TO GET VARIABLE town_map
+    edgelist = pd.read_parquet(edge_filepath)
+
+    # Node list file name
+    node_filename = town_map + "_topology_node_list.parquet"
+    node_filepath = os.path.join("gps_nav", directory, node_filename)
 
     # Grab node list data hosted on Gist
-    nodelist = pd.read_parquet("Town02_data/Town02_topology_node_list.parquet")  # NEED TO GET VARIABLE town_map
+    nodelist = pd.read_parquet(node_filepath)
 
     # Create empty directed graph
     g = nx.DiGraph()
@@ -73,46 +78,20 @@ def shortest_path(town_map, start_location, end_location):
     for i, nlrow in nodelist.iterrows():
         g.nodes[nlrow["id"]].update(nlrow[1:].to_dict())
 
-    # Define node positions data structure (dict) for plotting
-    node_positions = {
-        node[0]: (node[1]["lat"], -node[1]["lon"]) for node in g.nodes(data=True)
-    }
-
-    # # Making a nice plot that lines up nicely and should look like the carla map
-    # plt.figure(3, figsize=(8, 6))
-    # nx.draw_networkx_nodes(g, pos=node_positions, node_size=20, node_color="red")
-    # nx.draw_networkx_edges(g, pos=node_positions, edge_color="blue", arrows=False)
-    #
-    # # Display plot
-    # plt.show()
-    #
-    # # Filename using the name of the current carla map running
-    # directory = "Town02_data"
-    # if not os.path.exists(directory):
-    #     os.makedirs(directory)
-    # filename = "Town02_networkx_digraph.png"
-    # filepath = os.path.join(directory, filename)
-    #
-    # # Save Networkx Graph
-    # if os.path.isfile(filepath):
-    #     print("File already exist. No additional networkx directed graph was saved.")
-    # else:
-    #     print("Saving networkx graph (png file).")
-    #     plt.savefig(filepath)
-
     # Subset dataframe of node list incl. only lat and lon coordinates
     node_geo = nodelist[["lat", "lon"]]
 
     # Create array for use with spicy
     node_geo_array = np.array(node_geo)
 
-    # Get closest node to starting location
+    # Get closest node to starting location (1st commented out option to use if
     start_location_closest_node = find_closest_node(
-        node_list=nodelist, node_array=node_geo_array, location=start_location[0:1]  # ONLY NEED LAT AND LON IN THIS ORDER
+        node_list=nodelist, node_array=node_geo_array, location=start_location[0:2]
     )
+
     # Get closest node to ending location / destination
     end_location_closest_node = find_closest_node(
-        node_list=nodelist, node_array=node_geo_array, location=end_location[1:2]  # ONLY NEED LAT AND LON IN THIS ORDER
+        node_list=nodelist, node_array=node_geo_array, location=(end_location.latitude, end_location.longitude)
     )
 
     # Compute shortest path between the two nodes closest to start and end locations
@@ -122,6 +101,7 @@ def shortest_path(town_map, start_location, end_location):
         source=start_location_closest_node[0],
         target=end_location_closest_node[0],
         weight="distance",
+        method="dijkstra"
     )
 
     # Get lat, lon, and alt attributes of each nodes
@@ -131,23 +111,34 @@ def shortest_path(town_map, start_location, end_location):
         node_attributes = nodelist.loc[nodelist["id"] == i]
         shortest_path_geo = shortest_path_geo.append(node_attributes)
 
+    # !! QUICK FIX !! - Removing the last row prior adding destination in order to avoid the car too go too far
+    shortest_path_geo = shortest_path_geo[:-1]
+
     # Append destination to dataframe (ID 999 is only used for destination)
-    destination_attributes = {"id": 999, "lat": end_location[0], "lon": end_location[1], "alt": end_location[3]}
+    destination_attributes = {"id": 999, "lat": end_location.latitude, "lon": end_location.longitude, "alt": end_location.altitude}
     shortest_path_geo = shortest_path_geo.append(destination_attributes, ignore_index=True)
 
-    # # Create a directed graph and overlay the shortest path on it
-    # plt.figure(3, figsize=(8, 6))
-    # nx.draw_networkx_nodes(g, pos=node_positions, node_size=20, node_color="red")
-    # nx.draw_networkx_edges(g, pos=node_positions, edge_color="blue", arrows=False)
-    # path = shortest_path
-    # path_edges = list(zip(path, path[1:]))
-    # nx.draw_networkx_nodes(
-    #     g, pos=node_positions, nodelist=path, node_color="r", node_size=50
-    # )
-    # nx.draw_networkx_edges(
-    #     g, pos=node_positions, edgelist=path_edges, edge_color="g", width=4
-    # )
-    # plt.show()
+    # Define node positions data structure (dict) for plotting
+    node_positions = {
+        node[0]: (node[1]["lat"], -node[1]["lon"]) for node in g.nodes(data=True)
+    }
+
+    # Create a directed graph and overlay the shortest path on it
+    # This is useful for a demo in order to show GPS navigation output on 2D map
+    plt.figure(3, figsize=(8, 6))
+    nx.draw_networkx_nodes(g, pos=node_positions, node_size=20, node_color="red")
+    nx.draw_networkx_edges(g, pos=node_positions, edge_color="blue", arrows=False)
+    path = shortest_path
+    path_edges = list(zip(path, path[1:]))
+    nx.draw_networkx_nodes(
+        g, pos=node_positions, nodelist=path, node_color="r", node_size=50
+    )
+    nx.draw_networkx_edges(
+        g, pos=node_positions, edgelist=path_edges, edge_color="g", width=4
+    )
+    print("Close plot to continue...")
+    plt.show()
+    print("# # # # # # # # # # # # # # # # # # # # # #")
 
     return shortest_path_geo
 
@@ -195,7 +186,6 @@ def get_carla_path(shortest_path_geo):
     @return: dataframe of carla locations path
     """
     # Initialise lists
-    path = []
     id = []
     x = []
     y = []
@@ -209,7 +199,7 @@ def get_carla_path(shortest_path_geo):
         lat = row["lat"]
         lon = row["lon"]
         alt = row["alt"]
-        path += from_gps_to_xyz(lat, lon, alt)
+        path = from_gps_to_xyz(lat, lon, alt)
 
         x += [path[0]]
         y += [path[1]]
@@ -238,13 +228,12 @@ def shortest_path_visualizer(world, path):
 
         # Starting waypoint (green)
         if index == 0:
-            print("index 0 =", index)
             world.debug.draw_string(
                 carla.Location(a, b, c + 1),
                 "START",
                 draw_shadow=False,
                 color=carla.Color(r=255, g=64, b=0),
-                life_time=10.0,
+                life_time=30.0,
                 persistent_lines=False,
             )
             continue
@@ -256,7 +245,7 @@ def shortest_path_visualizer(world, path):
                 "END",
                 draw_shadow=False,
                 color=carla.Color(r=255, g=0, b=0),
-                life_time=120.0,
+                life_time=30.0,
                 persistent_lines=False,
             )
 
@@ -267,21 +256,31 @@ def shortest_path_visualizer(world, path):
                 "X",
                 draw_shadow=False,
                 color=carla.Color(r=0, g=0, b=255),
-                life_time=120.0,
+                life_time=30.0,
                 persistent_lines=False,
             )
 
 
-def process_nav_a2b(world, town, current_loc, destination):
+def process_nav_a2b(world, town, current_loc, destination, dest_fixed=True):
 
-    # Clean up the destination info
-    # destination_geo = carla_geo_clean(world.get_map().transform_to_geolocation(destination))  # to use when random
-    destination_geo = world.get_map().transform_to_geolocation(destination)  # ISSUE HERE? when using with x y z coordinates only...
+    print("Launching GPS Navigation...\n# # # # # # # # # # # # # # # # # # # # # #")
+
+    # Cleaning up the destination info
+    # For fixed/hardcoded destination (see base_model)
+    if dest_fixed:
+        destination_geo = world.get_map().transform_to_geolocation(carla.Location(x=destination[0], y=destination[1], z=destination[2]))
+    # For random CARLA location (see base_model)
+    else:
+        destination_geo = carla_geo_clean(world.get_map().transform_to_geolocation(destination))
+
+    print("Your have selected as destination:", destination_geo, "\n# # # # # # # # # # # # # # # # # # # # # #")
 
     # Get shortest path
     df_geo_path = shortest_path(town_map=town, start_location=current_loc, end_location=destination_geo)
+    print("We have found the shortest path thanks to the Dijkstra's algorithm.\n# # # # # # # # # # # # # # # # # # # # # #")
 
     # Visualize path on Carla map
+    print("Visualizing the shortest path on CARLA map...\n# # # # # # # # # # # # # # # # # # # # # #")
     shortest_path_visualizer(world, df_geo_path)
 
     # Convert geo path to carla location (x,y,z) path

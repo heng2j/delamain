@@ -19,7 +19,7 @@ import math
 # import pygame
 from matplotlib import pyplot as plt
 # from lane_tracking.lane_detector import LaneDetector
-from gps_nav.gnss import *
+from gps_nav.nav_a2b import *
 
 
 def main():
@@ -87,7 +87,7 @@ def main():
         gnss_location = carla.Location(0, 0, 0)
         gnss_rotation = carla.Rotation(0, 0, 0)
         gnss_transform = carla.Transform(gnss_location, gnss_rotation)
-        gnss_bp.set_attribute("sensor_tick", str(1.0))  # Wait time for sensor to update (1.0 = 1s)
+        gnss_bp.set_attribute("sensor_tick", str(5.0))  # Wait time for sensor to update (1.0 = 1s)
 
         # Spawn Agent
         transform = random.choice(world.get_map().get_spawn_points())
@@ -105,7 +105,14 @@ def main():
 
         # Activate Sensors
         # cam_rgb.listen(lambda data: process_img(data))  # Camera RGB Sensor
-        gnss.listen(lambda event: gnss_live_location(event))  # GNSS Sensor
+        current_loc = gnss.listen(lambda event: gnss_live_location(event))  # GNSS Sensor
+
+        # Random Destination
+        destination = random.choice(world.get_map().get_spawn_points())
+        print(destination)
+        # Get shortest path
+        shortest_path(current_loc, destination)
+        print(shortest_path())
 
         # Let's put the vehicle to drive around.
         vehicle.set_autopilot(True)

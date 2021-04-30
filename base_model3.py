@@ -130,10 +130,13 @@ def game_loop(args):
 
                     # Gather and send waypoints one by one to vehicle
                     for index, row in df_carla_path.iterrows():
-                        target_waypoint = row
+                        # target_waypoint = row
                         target_x = row["x"]
                         target_y = row["y"]
                         target_z = row["z"]
+
+                        next_waypoint = carla.Transform(carla.Location(x=target_x, y=target_y, z=target_z))
+
                         ...
 
                     ##################################################################

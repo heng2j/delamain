@@ -88,7 +88,6 @@ def main():
             # To visualize each waypoint on the CARLA map
             # Starting waypoint (green)
             if index == 0:
-                print("index 0 =", index)
                 world.debug.draw_string(
                     carla.Location(a, b, c + 1),
                     "START",

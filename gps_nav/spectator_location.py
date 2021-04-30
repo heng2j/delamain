@@ -1,3 +1,14 @@
+"""
+Spectator Location
+
+This script gives you the exact carla location in x,y,z format of the spectator position.
+Can be used to retrieve specific locations like parking, a desired destination etc.
+
+Beginning part of the code is based on: https://www.datacamp.com/community/tutorials/networkx-python-graph-tutorial
+
+Created by DevGlitch
+"""
+
 import glob
 import os
 import sys
