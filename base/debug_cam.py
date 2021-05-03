@@ -49,7 +49,7 @@ def debug_view(*sensors):
     # lane track condition
     if lane_mask.any():
         lane_cnd = lane_mask[:, :] < 0.1
-        debug_image[lane_cnd, 0] = 255
+        debug_image[lane_cnd, 2] = 255
 
     #########################################################################
     cv2.imshow("debug view", debug_image)

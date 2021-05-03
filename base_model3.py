@@ -51,7 +51,7 @@ def game_loop(args):
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
         hud = HUD(args.width, args.height)
-        test_map = client.load_world('Town05')
+        test_map = client.load_world('Town03')
         world = World(test_map, hud, args)
         controller = KeyboardControl(world, False)
 
@@ -118,8 +118,7 @@ def game_loop(args):
                         traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
                         # dgmd_mask = image_pipeline(image_seg)
                         # save_img(image_seg)
-                        # print(traj.shape, traj)
-                        pass
+                        print(traj.shape, traj)
                     except:
                         continue
                     # ==================================================================
@@ -132,7 +131,7 @@ def game_loop(args):
                 # PID Control
                 if traj.any():
                     speed = get_speed(world.player)
-                    throttle, steer = a_controller.get_control(traj, speed, desired_speed=10, dt=1./FPS)
+                    throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1./FPS)
                     send_control(world.player, throttle, steer, 0)
 
                 world.tick(clock)
