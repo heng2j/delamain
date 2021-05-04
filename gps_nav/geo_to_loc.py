@@ -15,15 +15,18 @@ import torch
 
 
 ######################################################################################
-def geo_to_location(geo):
+def geo_init():
+    geo_model = torch.load("gps_nav/geo2loc.pth")
+    return geo_model
+
+def geo_to_location(geo, geo_model):
     """
     param: carla.geo(latitude, longitude, altitude)
     return: carla.Location(x, y, z)
     """
-
-    model = torch.load("geo2loc.pth")
+    # model = torch.load("geo2loc.pth")
     test = [[geo.latitude, geo.longitude, geo.altitude]]
-    prediction = model.predict(X=test)
+    prediction = geo_model.predict(X=test)
     x = prediction[0][0]
     y = prediction[0][1]
     z = prediction[0][2]

@@ -32,6 +32,7 @@ from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_d
 from lane_tracking.dgmd_track import image_pipeline
 
 from gps_nav.nav_a2b import *
+from gps_nav.geo_to_loc import geo_init, geo_to_location
 
 
 # ==============================================================================
@@ -64,6 +65,7 @@ def game_loop(args):
         # TODO - features init/misc
         a_controller = PurePursuitPlusPID()
         cg, ld = lane_track_init()
+        geo_model = geo_init()
 
         # TODO - add sensors
         blueprint_library = world.world.get_blueprint_library()
@@ -105,7 +107,7 @@ def game_loop(args):
         # ==================================================================
 
         FPS = 30
-        speed, traj = 0, np.array([])
+        speed, traj, df_carla_path = 0, np.array([]), np.array([])
         time_cycle, cycles = 0.0, 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
@@ -126,21 +128,20 @@ def game_loop(args):
                     image_seg.convert(carla.ColorConverter.CityScapesPalette)
                     # ==================================================================
                     # TODO - run features
-                    # try:
                     traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
                     current_loc = [gnss_data.latitude, gnss_data.longitude, gnss_data.altitude]
                     if world.gps_flag == True:
                         df_carla_path = process_nav_a2b(world.world, str(world.world.get_map().name), current_loc,
-                                                        destination, dest_fixed=True)  # put dest_fixed=False if random location
+                                                        destination, dest_fixed=True, graph_vis=world.gps_vis, wp_vis=world.gps_vis)  # put dest_fixed=False if random location
                         world.gps_flag = False
 
-                    print(current_loc)
+                    ego_carla_loc = geo_to_location(gnss_data, geo_model)
+                    print(ego_carla_loc)
+                    # print(current_loc)
 
                     # dgmd_mask = image_pipeline(image_seg)
                     # save_img(image_seg)
                     # print(traj.shape, traj)
-                    # except:
-                    #     continue
 
                     # ==================================================================
                     # Debug data
@@ -148,9 +149,17 @@ def game_loop(args):
                     # debug_view(image_rgb, image_seg)
                     # cv2.imshow("debug view", dgmd_mask)
                     # cv2.waitKey(1)
+                if df_carla_path.any():
+                    # next waypoint
+                    # TODO - include in pipeline
+                    row = df_carla_path.iloc[0]
+                    target_x = row["x"]
+                    target_y = row["y"]
+                    target_z = row["z"]
+                    target_transform = carla.Transform(carla.Location(x=target_x, y=target_y, z=target_z))
+                    # print(target_transform.is_junction)
 
                 # PID Control
-                # if traj.any():
                 if world.autopilot_flag and traj.any():
                     speed = get_speed(world.player)
                     throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1./FPS)

@@ -40,7 +40,7 @@ def find_closest_node(node_list, node_array, location):
     return node_list.iloc[index]
 
 
-def shortest_path(town_map, start_location, end_location):
+def shortest_path(town_map, start_location, end_location, vis=False):
     """
     This script creates a networkx directed graph using the topology data previously created (geolocations).
     Find the closest node of the starting and ending locations.
@@ -123,22 +123,23 @@ def shortest_path(town_map, start_location, end_location):
         node[0]: (node[1]["lat"], -node[1]["lon"]) for node in g.nodes(data=True)
     }
 
-    # Create a directed graph and overlay the shortest path on it
-    # This is useful for a demo in order to show GPS navigation output on 2D map
-    plt.figure(3, figsize=(8, 6))
-    nx.draw_networkx_nodes(g, pos=node_positions, node_size=20, node_color="red")
-    nx.draw_networkx_edges(g, pos=node_positions, edge_color="blue", arrows=False)
-    path = shortest_path
-    path_edges = list(zip(path, path[1:]))
-    nx.draw_networkx_nodes(
-        g, pos=node_positions, nodelist=path, node_color="r", node_size=50
-    )
-    nx.draw_networkx_edges(
-        g, pos=node_positions, edgelist=path_edges, edge_color="g", width=4
-    )
-    print("Close plot to continue...")
-    plt.show()
-    print("# # # # # # # # # # # # # # # # # # # # # #")
+    if vis:
+        # Create a directed graph and overlay the shortest path on it
+        # This is useful for a demo in order to show GPS navigation output on 2D map
+        plt.figure(3, figsize=(8, 6))
+        nx.draw_networkx_nodes(g, pos=node_positions, node_size=20, node_color="red")
+        nx.draw_networkx_edges(g, pos=node_positions, edge_color="blue", arrows=False)
+        path = shortest_path
+        path_edges = list(zip(path, path[1:]))
+        nx.draw_networkx_nodes(
+            g, pos=node_positions, nodelist=path, node_color="r", node_size=50
+        )
+        nx.draw_networkx_edges(
+            g, pos=node_positions, edgelist=path_edges, edge_color="g", width=4
+        )
+        print("Close plot to continue...")
+        plt.show()
+        print("# # # # # # # # # # # # # # # # # # # # # #")
 
     return shortest_path_geo
 
@@ -261,7 +262,7 @@ def shortest_path_visualizer(world, path):
             )
 
 
-def process_nav_a2b(world, town, current_loc, destination, dest_fixed=True):
+def process_nav_a2b(world, town, current_loc, destination, dest_fixed=True, graph_vis=True, wp_vis=True):
 
     print("Launching GPS Navigation...\n# # # # # # # # # # # # # # # # # # # # # #")
 
@@ -275,13 +276,14 @@ def process_nav_a2b(world, town, current_loc, destination, dest_fixed=True):
 
     print("Your have selected as destination:", destination_geo, "\n# # # # # # # # # # # # # # # # # # # # # #")
 
-    # Get shortest path
-    df_geo_path = shortest_path(town_map=town, start_location=current_loc, end_location=destination_geo)
+    # Get shortest path + graph visual
+    df_geo_path = shortest_path(town_map=town, start_location=current_loc, end_location=destination_geo, vis=graph_vis)
     print("We have found the shortest path thanks to the Dijkstra's algorithm.\n# # # # # # # # # # # # # # # # # # # # # #")
 
     # Visualize path on Carla map
-    print("Visualizing the shortest path on CARLA map...\n# # # # # # # # # # # # # # # # # # # # # #")
-    shortest_path_visualizer(world, df_geo_path)
+    if wp_vis:
+        print("Visualizing the shortest path on CARLA map...\n# # # # # # # # # # # # # # # # # # # # # #")
+        shortest_path_visualizer(world, df_geo_path)
 
     # Convert geo path to carla location (x,y,z) path
     df_carla_path = get_carla_path(df_geo_path)
