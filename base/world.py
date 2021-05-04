@@ -40,6 +40,8 @@ class World(object):
         self.recording_enabled = False
         self.recording_start = 0
         self.constant_velocity_enabled = False
+        self.gps_flag = False
+        self.autopilot_flag = False
 
     def restart(self):
         self.player_max_speed = 1.589

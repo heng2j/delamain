@@ -16,21 +16,13 @@ Use ARROWS or WASD keys for control.
     L            : toggle next light type
     SHIFT + L    : toggle high beam
     Z/X          : toggle right/left blinker
-    I            : toggle interior light
+    I            : activate GPS
 
     TAB          : change sensor position
     ` or N       : next sensor
     [1-9]        : change to sensor [1-9]
     G            : toggle radar visualization
     C            : change weather (Shift+C reverse)
-    Backspace    : change vehicle
-
-    R            : toggle recording images to disk
-
-    CTRL + R     : toggle recording of simulation (replacing any previous)
-    CTRL + P     : start replaying last recorded simulation
-    CTRL + +     : increments the start time of the replay by 1 second (+SHIFT = 10 seconds)
-    CTRL + -     : decrements the start time of the replay by 1 second (+SHIFT = 10 seconds)
 
     F1           : toggle HUD
     H/?          : toggle help
@@ -194,6 +186,7 @@ class KeyboardControl(object):
                     elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
                         self._autopilot_enabled = not self._autopilot_enabled
                         # world.player.set_autopilot(self._autopilot_enabled)
+                        world.autopilot_flag = True if self._autopilot_enabled else False
                         world.hud.notification(
                             'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
@@ -218,7 +211,10 @@ class KeyboardControl(object):
                             current_lights ^= carla.VehicleLightState.LowBeam
                             current_lights ^= carla.VehicleLightState.Fog
                     elif event.key == K_i:
-                        current_lights ^= carla.VehicleLightState.Interior
+                        # current_lights ^= carla.VehicleLightState.Interior
+                        # Modification
+                        world.gps_flag = True
+                        world.hud.notification("GPS navigation activated")
                     elif event.key == K_z:
                         current_lights ^= carla.VehicleLightState.LeftBlinker
                     elif event.key == K_x:

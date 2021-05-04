@@ -82,7 +82,8 @@ def game_loop(args):
 
         # GNSS sensor
         bp_gnss = blueprint_library.find('sensor.other.gnss')
-        bp_gnss.set_attribute("sensor_tick", str(1.0))  # Wait time for sensor to update (1.0 = 1s)
+        # TODO - mock destination
+        destination = (-20.639827728271484, -142.1471405029297, 1.0)  # Fixed Location in Town03
 
         # Spawn Sensors
         transform = carla.Transform(carla.Location(x=0.7, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
@@ -97,8 +98,10 @@ def game_loop(args):
         # Append actors / may not be necessary
         actor_list.append(cam_rgb)
         actor_list.append(cam_seg)
+        actor_list.append(gnss)
         sensors.append(cam_rgb)
         sensors.append(cam_seg)
+        sensors.append(gnss)
         # ==================================================================
 
         FPS = 30
@@ -106,7 +109,7 @@ def game_loop(args):
         time_cycle, cycles = 0.0, 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
-        with CarlaSyncMode(world.world, cam_rgb, cam_seg, fps=FPS) as sync_mode:
+        with CarlaSyncMode(world.world, cam_rgb, cam_seg, gnss, fps=FPS) as sync_mode:
             while True:
                 clock.tick_busy_loop(FPS)
                 time_cycle += clock.get_time()
@@ -115,7 +118,7 @@ def game_loop(args):
                 # Advance the simulation and wait for the data.
                 tick_response = sync_mode.tick(timeout=2.0)
                 # Data retrieval
-                snapshot, image_rgb, image_seg = tick_response
+                snapshot, image_rgb, image_seg, gnss_data = tick_response
 
                 if time_cycle >= 1000.0/cycles:
                     time_cycle = 0.0
@@ -125,6 +128,14 @@ def game_loop(args):
                     # TODO - run features
                     # try:
                     traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
+                    current_loc = [gnss_data.latitude, gnss_data.longitude, gnss_data.altitude]
+                    if world.gps_flag == True:
+                        df_carla_path = process_nav_a2b(world.world, str(world.world.get_map().name), current_loc,
+                                                        destination, dest_fixed=True)  # put dest_fixed=False if random location
+                        world.gps_flag = False
+
+                    print(current_loc)
+
                     # dgmd_mask = image_pipeline(image_seg)
                     # save_img(image_seg)
                     # print(traj.shape, traj)
@@ -139,7 +150,8 @@ def game_loop(args):
                     # cv2.waitKey(1)
 
                 # PID Control
-                if traj.any():
+                # if traj.any():
+                if world.autopilot_flag and traj.any():
                     speed = get_speed(world.player)
                     throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1./FPS)
                     send_control(world.player, throttle, steer, 0)
