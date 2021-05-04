@@ -31,6 +31,8 @@ from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
 from lane_tracking.dgmd_track import image_pipeline
 
+from gps_nav.nav_a2b import *
+
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -78,12 +80,19 @@ def game_loop(args):
         bp_cam_seg.set_attribute('image_size_y', str(cg.image_height))
         bp_cam_seg.set_attribute('fov', str(cg.field_of_view_deg))
 
+        # GNSS sensor
+        bp_gnss = blueprint_library.find('sensor.other.gnss')
+        bp_gnss.set_attribute("sensor_tick", str(1.0))  # Wait time for sensor to update (1.0 = 1s)
+
         # Spawn Sensors
         transform = carla.Transform(carla.Location(x=0.7, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
         cam_rgb = world.world.spawn_actor(bp_cam_rgb, transform, attach_to=world.player)
         print('created %s' % cam_rgb.type_id)
         cam_seg = world.world.spawn_actor(bp_cam_seg, transform, attach_to=world.player)
         print('created %s' % cam_seg.type_id)
+        gnss_transform = carla.Transform(carla.Location(0, 0, 0), carla.Rotation(0, 0, 0))
+        gnss = world.world.spawn_actor(bp_gnss, gnss_transform, attach_to=world.player)
+        print('created %s' % gnss.type_id)
 
         # Append actors / may not be necessary
         actor_list.append(cam_rgb)
@@ -114,13 +123,14 @@ def game_loop(args):
                     image_seg.convert(carla.ColorConverter.CityScapesPalette)
                     # ==================================================================
                     # TODO - run features
-                    try:
-                        traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
-                        # dgmd_mask = image_pipeline(image_seg)
-                        # save_img(image_seg)
-                        print(traj.shape, traj)
-                    except:
-                        continue
+                    # try:
+                    traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
+                    # dgmd_mask = image_pipeline(image_seg)
+                    # save_img(image_seg)
+                    # print(traj.shape, traj)
+                    # except:
+                    #     continue
+
                     # ==================================================================
                     # Debug data
                     debug_view(image_rgb, image_seg, lane_mask)

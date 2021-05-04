@@ -42,13 +42,13 @@ def debug_view(*sensors):
     # seg cam
     seg_cam = process_seg(sensors[1])
     # lane_mask
-    if sensors[2].any():
-        lane_mask = sensors[2]
+    # if sensors[2].any():
+    #     lane_mask = sensors[2]
     debug_image = rgb_cam[:]
     # TODO: Filter masks
     # lane track condition
-    if lane_mask.any():
-        lane_cnd = lane_mask[:, :] < 0.1
+    if sensors[2].any():
+        lane_cnd = sensors[2][:, :] < 0.1
         debug_image[lane_cnd, 2] = 255
 
     #########################################################################

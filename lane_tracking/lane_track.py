@@ -32,11 +32,15 @@ def get_trajectory_from_lane_detector(ld, image):
     return: traj
     """
     image_arr = carla_img_to_array(image)
-    poly_left, poly_right, debug = ld(image_arr)
-    x = np.arange(-2,60,1.0)
-    y = -0.5*(poly_left(x)+poly_right(x))
-    x += 0.5
-    traj = np.stack((x,y)).T
+    try:
+        poly_left, poly_right, debug = ld(image_arr)
+        x = np.arange(-2,60,1.0)
+        y = -0.5*(poly_left(x)+poly_right(x))
+        x += 0.5
+        traj = np.stack((x,y)).T
+    except:
+        traj = np.array([])
+        debug = np.array([])
     return traj, debug
 
 
