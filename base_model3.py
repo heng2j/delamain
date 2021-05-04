@@ -107,7 +107,7 @@ def game_loop(args):
         # ==================================================================
 
         FPS = 30
-        speed, traj, df_carla_path = 0, np.array([]), np.array([])
+        speed, traj, df_carla_path = 0, np.array([]), pd.DataFrame()
         time_cycle, cycles = 0.0, 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
@@ -134,9 +134,25 @@ def game_loop(args):
                         df_carla_path = process_nav_a2b(world.world, str(world.world.get_map().name), current_loc,
                                                         destination, dest_fixed=True, graph_vis=world.gps_vis, wp_vis=world.gps_vis)  # put dest_fixed=False if random location
                         world.gps_flag = False
+                        wp_counter = 1
+
+                    if not df_carla_path.empty:
+                        # next waypoint
+                        # TODO - include in pipeline
+                        row = df_carla_path.iloc[wp_counter]
+                        target_x = row["x"]
+                        target_y = row["y"]
+                        target_z = row["z"]
+                        next_carla_loc = carla.Location(x=target_x, y=target_y, z=target_z)
+                        # target_transform = carla.Transform(carla.Location(x=target_x, y=target_y, z=target_z))
+                        print("path:", next_carla_loc)
+                        distance = next_carla_loc.distance(ego_carla_loc)
+                        print("distance:", distance)
+                        if distance <= 1.0:
+                            wp_counter += 1
 
                     ego_carla_loc = geo_to_location(gnss_data, geo_model)
-                    print(ego_carla_loc)
+                    print("ego:", ego_carla_loc)
                     # print(current_loc)
 
                     # dgmd_mask = image_pipeline(image_seg)
@@ -149,15 +165,6 @@ def game_loop(args):
                     # debug_view(image_rgb, image_seg)
                     # cv2.imshow("debug view", dgmd_mask)
                     # cv2.waitKey(1)
-                if df_carla_path.any():
-                    # next waypoint
-                    # TODO - include in pipeline
-                    row = df_carla_path.iloc[0]
-                    target_x = row["x"]
-                    target_y = row["y"]
-                    target_z = row["z"]
-                    target_transform = carla.Transform(carla.Location(x=target_x, y=target_y, z=target_z))
-                    # print(target_transform.is_junction)
 
                 # PID Control
                 if world.autopilot_flag and traj.any():
