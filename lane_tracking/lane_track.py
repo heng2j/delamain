@@ -27,6 +27,7 @@ def lane_track_init():
 
 def get_trajectory_from_lane_detector(ld, image):
     """
+    polyfit excepts means junction
     param: ld = lane detector
     image: windshield rgb cam
     return: traj
@@ -38,10 +39,12 @@ def get_trajectory_from_lane_detector(ld, image):
         y = -0.5*(poly_left(x)+poly_right(x))
         x += 0.5
         traj = np.stack((x,y)).T
+        warning = False
     except:
+        warning = True
         traj = np.array([])
         debug = np.array([])
-    return traj, debug
+    return traj, debug, warning
 
 
 def get_speed(vehicle):

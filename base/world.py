@@ -43,6 +43,7 @@ class World(object):
         self.gps_flag = False
         self.gps_vis = True
         self.autopilot_flag = False
+        self.save_img = False
 
     def restart(self):
         self.player_max_speed = 1.589

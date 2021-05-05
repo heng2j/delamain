@@ -13,8 +13,8 @@ def process_img(image):
     return i3
 
 
-def save_img(image):
-    image.save_to_disk('data/dgmd/image_%s.png' % image.timestamp)
+def save_img(image, path='data/dgmd/image_%s.png'):
+    image.save_to_disk(path % image.timestamp)
 
 
 def process_seg(image):
@@ -30,7 +30,7 @@ def fast_track_debug(mask):
     return rgb_mask
 
 
-def debug_view(*sensors):
+def debug_view(*sensors, text=[1.0]):
     """
     param: sensor data
 
@@ -43,11 +43,15 @@ def debug_view(*sensors):
     seg_cam = process_seg(sensors[1])
 
     debug_image = rgb_cam[:]
+
     # TODO: Filter masks
     # lane track condition
     if sensors[2].any():
         lane_cnd = sensors[2][:, :] < 0.1
         debug_image[lane_cnd, 2] = 255
+
+    # add text
+    debug_image = cv2.putText(np.array(debug_image), 'Junction Status: '+str(text[0]), (15, 15), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
 
     #########################################################################
     cv2.imshow("debug view", debug_image)

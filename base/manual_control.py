@@ -8,15 +8,13 @@ Use ARROWS or WASD keys for control.
     A/D          : steer left/right
     Q            : toggle reverse
     Space        : hand-brake
+
     P            : toggle autopilot
-    M            : toggle manual transmission
-    ,/.          : gear up/down
-    CTRL + W     : toggle constant velocity mode at 60 km/h
+    I            : activate GPS
 
     L            : toggle next light type
     SHIFT + L    : toggle high beam
     Z/X          : toggle right/left blinker
-    I            : activate GPS
 
     TAB          : change sensor position
     ` or N       : next sensor
@@ -24,6 +22,7 @@ Use ARROWS or WASD keys for control.
     G            : toggle radar visualization
     C            : change weather (Shift+C reverse)
 
+    R            : save image
     F1           : toggle HUD
     H/?          : toggle help
     ESC          : quit
@@ -134,17 +133,19 @@ class KeyboardControl(object):
                         world.hud.notification("Enabled Constant Velocity Mode at 60 km/h")
                 elif event.key > K_0 and event.key <= K_9:
                     world.camera_manager.set_sensor(event.key - 1 - K_0)
-                elif event.key == K_r and not (pygame.key.get_mods() & KMOD_CTRL):
-                    world.camera_manager.toggle_recording()
-                elif event.key == K_r and (pygame.key.get_mods() & KMOD_CTRL):
-                    if (world.recording_enabled):
-                        client.stop_recorder()
-                        world.recording_enabled = False
-                        world.hud.notification("Recorder is OFF")
-                    else:
-                        client.start_recorder("manual_recording.rec")
-                        world.recording_enabled = True
-                        world.hud.notification("Recorder is ON")
+                # elif event.key == K_r and not (pygame.key.get_mods() & KMOD_CTRL):
+                #     world.camera_manager.toggle_recording()
+                # elif event.key == K_r and (pygame.key.get_mods() & KMOD_CTRL):
+                #     if (world.recording_enabled):
+                #         client.stop_recorder()
+                #         world.recording_enabled = False
+                #         world.hud.notification("Recorder is OFF")
+                #     else:
+                #         client.start_recorder("manual_recording.rec")
+                #         world.recording_enabled = True
+                #         world.hud.notification("Recorder is ON")
+                elif event.key == K_r:
+                    world.save_img = True
                 elif event.key == K_p and (pygame.key.get_mods() & KMOD_CTRL):
                     # stop recorder
                     client.stop_recorder()

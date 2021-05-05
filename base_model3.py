@@ -15,11 +15,8 @@ except IndexError:
 # -- imports -------------------------------------------------------------------
 # ==============================================================================
 
-import carla
 import pygame
 import argparse
-import numpy as np
-import cv2
 
 from base.hud import HUD
 from base.world import World
@@ -29,7 +26,7 @@ from base.debug_cam import debug_view, save_img
 
 from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
-from lane_tracking.dgmd_track import image_pipeline
+# from intersection.intersection import intersection_init
 
 from gps_nav.nav_a2b import *
 from gps_nav.geo_to_loc import geo_init, geo_to_location
@@ -66,6 +63,7 @@ def game_loop(args):
         a_controller = PurePursuitPlusPID()
         cg, ld = lane_track_init()
         geo_model = geo_init()
+        # intersection_init(world.world)
 
         # TODO - add sensors
         blueprint_library = world.world.get_blueprint_library()
@@ -128,7 +126,7 @@ def game_loop(args):
                     image_seg.convert(carla.ColorConverter.CityScapesPalette)
                     # ==================================================================
                     # TODO - run features
-                    traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
+                    traj, lane_mask, poly_warning = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
                     current_loc = [gnss_data.latitude, gnss_data.longitude, gnss_data.altitude]
                     if world.gps_flag == True:
                         df_carla_path = process_nav_a2b(world.world, str(world.world.get_map().name), current_loc,
@@ -140,37 +138,41 @@ def game_loop(args):
                         # next waypoint
                         # TODO - include in pipeline
                         row = df_carla_path.iloc[wp_counter]
-                        target_x = row["x"]
-                        target_y = row["y"]
-                        target_z = row["z"]
-                        next_carla_loc = carla.Location(x=target_x, y=target_y, z=target_z)
-                        # target_transform = carla.Transform(carla.Location(x=target_x, y=target_y, z=target_z))
-                        print("path:", next_carla_loc)
+                        next_carla_loc = carla.Location(x=row["x"], y=row["y"], z=row["z"])
+
                         distance = next_carla_loc.distance(ego_carla_loc)
                         print("distance:", distance)
                         if distance <= 1.0:
                             wp_counter += 1
 
                     ego_carla_loc = geo_to_location(gnss_data, geo_model)
-                    print("ego:", ego_carla_loc)
-                    # print(current_loc)
+                    if poly_warning:
+                        # junction = world.world.get_map().get_waypoint(ego_carla_loc).is_junction
+                        junction = True
+                    else:
+                        junction = False
 
                     # dgmd_mask = image_pipeline(image_seg)
-                    # save_img(image_seg)
-                    # print(traj.shape, traj)
+
+                    # manual data collection
+                    if world.save_img:
+                        save_img(image_rgb, path='intersection/data/image_%s.png')
+                        world.save_img = False
 
                     # ==================================================================
                     # Debug data
-                    debug_view(image_rgb, image_seg, lane_mask)
+                    debug_view(image_rgb, image_seg, lane_mask, text=[junction])
                     # debug_view(image_rgb, image_seg)
                     # cv2.imshow("debug view", dgmd_mask)
                     # cv2.waitKey(1)
 
                 # PID Control
-                if world.autopilot_flag and traj.any():
+                if world.autopilot_flag and traj.any() and not junction:
                     speed = get_speed(world.player)
                     throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1./FPS)
                     send_control(world.player, throttle, steer, 0)
+                elif world.autopilot_flag and junction:
+                    pass
 
                 world.tick(clock)
                 world.render(display)
