@@ -52,9 +52,11 @@ def debug_view(*sensors, text=[1.0]):
 
     # add text
     debug_image = cv2.putText(np.array(debug_image), 'Junction Status: '+str(text[0]), (15, 15),
-                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
     debug_image = cv2.putText(np.array(debug_image), 'PID Type: ' + str(text[1]), (15, 30),
-                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
+    debug_image = cv2.putText(np.array(debug_image), 'Route: ' + str(text[2]), (15, 45),
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
 
     #########################################################################
     cv2.imshow("debug view", debug_image)
