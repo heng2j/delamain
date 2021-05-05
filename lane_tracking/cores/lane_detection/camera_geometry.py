@@ -22,7 +22,7 @@ def project_polyline(polyline_world, trafo_world_to_cam, K):
 
 
 class CameraGeometry(object):
-    def __init__(self, height=1.3, pitch_deg=5, image_width=1024, image_height=512, field_of_view_deg=45):
+    def __init__(self, height=2, pitch_deg=5, image_width=768, image_height=288, field_of_view_deg=120):
         # scalar constants
         self.height = height
         self.pitch_deg = pitch_deg

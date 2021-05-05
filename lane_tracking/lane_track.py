@@ -21,7 +21,7 @@ from lane_tracking.util.carla_util import carla_vec_to_np_array, carla_img_to_ar
 
 def lane_track_init():
     cg = CameraGeometry()
-    ld = LaneDetector(model_path=Path("lane_tracking/best_model.pth").absolute())
+    ld = LaneDetector(model_path=Path("lane_tracking/best_model_multi_dice_loss.pth").absolute())
     return cg, ld
 
 

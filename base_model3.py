@@ -19,20 +19,23 @@ import carla
 import pygame
 import argparse
 import numpy as np
+import cv2
 
 from base.hud import HUD
 from base.world import World
 from base.manual_control import KeyboardControl
 from lane_tracking.util.carla_util import CarlaSyncMode
-from base.debug_cam import debug_view
+from base.debug_cam import debug_view, save_img
 
 from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
+from lane_tracking.dgmd_track import image_pipeline
 
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
 # ==============================================================================
+
 
 def game_loop(args):
     pygame.init()
@@ -48,7 +51,7 @@ def game_loop(args):
             pygame.HWSURFACE | pygame.DOUBLEBUF)
 
         hud = HUD(args.width, args.height)
-        test_map = client.load_world('Town04')
+        test_map = client.load_world('Town03')
         world = World(test_map, hud, args)
         controller = KeyboardControl(world, False)
 
@@ -68,24 +71,33 @@ def game_loop(args):
         bp_cam_rgb.set_attribute('image_size_x', str(cg.image_width))
         bp_cam_rgb.set_attribute('image_size_y', str(cg.image_height))
         bp_cam_rgb.set_attribute('fov', str(cg.field_of_view_deg))
-        # bp_cam_rgb.set_attribute('sensor_tick', '0.0')
+
+        # Semantic Segmentation camera
+        bp_cam_seg = blueprint_library.find('sensor.camera.semantic_segmentation')
+        bp_cam_seg.set_attribute('image_size_x', str(cg.image_width))
+        bp_cam_seg.set_attribute('image_size_y', str(cg.image_height))
+        bp_cam_seg.set_attribute('fov', str(cg.field_of_view_deg))
 
         # Spawn Sensors
-        transform = carla.Transform(carla.Location(x=0.5, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
+        transform = carla.Transform(carla.Location(x=0.7, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
         cam_rgb = world.world.spawn_actor(bp_cam_rgb, transform, attach_to=world.player)
         print('created %s' % cam_rgb.type_id)
+        cam_seg = world.world.spawn_actor(bp_cam_seg, transform, attach_to=world.player)
+        print('created %s' % cam_seg.type_id)
 
         # Append actors / may not be necessary
         actor_list.append(cam_rgb)
+        actor_list.append(cam_seg)
         sensors.append(cam_rgb)
+        sensors.append(cam_seg)
         # ==================================================================
 
         FPS = 30
         speed, traj = 0, np.array([])
-        time_cycle, cycles = 0.0, 8
+        time_cycle, cycles = 0.0, 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
-        with CarlaSyncMode(world.world, cam_rgb, fps=FPS) as sync_mode:
+        with CarlaSyncMode(world.world, cam_rgb, cam_seg, fps=FPS) as sync_mode:
             while True:
                 clock.tick_busy_loop(FPS)
                 time_cycle += clock.get_time()
@@ -94,19 +106,28 @@ def game_loop(args):
                 # Advance the simulation and wait for the data.
                 tick_response = sync_mode.tick(timeout=2.0)
                 # Data retrieval
-                snapshot, image_rgb = tick_response
+                snapshot, image_rgb, image_seg = tick_response
 
                 if time_cycle >= 1000.0/cycles:
                     time_cycle = 0.0
 
+                    image_seg.convert(carla.ColorConverter.CityScapesPalette)
                     # ==================================================================
                     # TODO - run features
-                    traj, lane_mask = get_trajectory_from_lane_detector(ld, image_rgb) # stay in lane
-
-
+                    try:
+                        traj, lane_mask = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
+                        # dgmd_mask = image_pipeline(image_seg)
+                        # save_img(image_seg)
+                        print(traj.shape, traj)
+                    except:
+                        continue
                     # ==================================================================
                     # Debug data
-                    debug_view(image_rgb, lane_mask)
+                    debug_view(image_rgb, image_seg, lane_mask)
+                    # debug_view(image_rgb, image_seg)
+                    # cv2.imshow("debug view", dgmd_mask)
+                    # cv2.waitKey(1)
+
                 # PID Control
                 if traj.any():
                     speed = get_speed(world.player)
