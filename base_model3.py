@@ -111,7 +111,7 @@ def game_loop(args):
 
         FPS = 30
         speed, traj = 0, np.array([])
-        df_carla_path, wp_counter, final_wp = pd.DataFrame(), 0, False
+        df_carla_path, wp_counter, final_wp, wp_distance = pd.DataFrame(), 0, False, 0
         time_cycle, cycles, wp_cycle = 0.0, 30, 0.0
         route = False
         pid_type, visual_nav = "N/A", True
@@ -142,8 +142,9 @@ def game_loop(args):
                                                         destination, dest_fixed=True, graph_vis=world.gps_vis, wp_vis=world.gps_vis)  # put dest_fixed=False if random location
                         world.gps_flag = False
                         wp_counter = 1
+                        route = None
 
-                    if not df_carla_path.empty:
+                    if not df_carla_path.empty and not final_wp:
                         # next waypoint
                         row = df_carla_path.iloc[wp_counter]
                         next_carla_loc = carla.Location(x=row["x"], y=row["y"], z=row["z"])
@@ -155,7 +156,7 @@ def game_loop(args):
                             route = None
                             # last waypoint
                             if wp_counter == len(df_carla_path)-1:
-                                wp_counter = 0
+                                # wp_counter = 0
                                 visual_nav = False
                                 final_wp = True
                                 route = routeplanner.trace_route(ego_carla_loc, next_carla_loc)
@@ -173,7 +174,8 @@ def game_loop(args):
 
                     # ==================================================================
                     # Debug data
-                    debug_view(image_rgb, image_seg, lane_mask, text=[not visual_nav, pid_type])
+                    debug_view(image_rgb, image_seg, lane_mask,
+                               text=[not visual_nav, pid_type, round(wp_distance, 2), wp_counter])
 
                 # PID Controls
                 if world.autopilot_flag:
@@ -186,26 +188,33 @@ def game_loop(args):
                         throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1. / FPS)
                         send_control(world.player, throttle, steer, 0)
                         route = None
-                    elif final_wp:
-                        control = gps_pid(route[-1][0], 0, b_controller)
-                        world.player.apply_control(control)
+                    # elif final_wp:
+                    #     control = gps_pid(route[-1][0], 0, b_controller)
+                    #     world.player.apply_control(control)
                     else:
                         pid_type = "gps"
                         if not route:
                             route = routeplanner.trace_route(ego_carla_loc, next_carla_loc)
-                            route_counter = 1
-                        if route_counter == len(route)-2:
+                            route_counter = 0
+                        if route_counter == len(route)-1:
                             route = None
                             continue
-                        pid_type = "gps"
-                        wp = route[route_counter][0]
-                        world.world.debug.draw_point(route[route_counter + 2][0].transform.location,
-                                                     color=carla.Color(r=0, g=255, b=0), size=0.1,
-                                                     life_time=120.0)
+                        # wp = route[route_counter][0]
+                        wp = route[-1][0]
+                        if route_counter < len(route)-4:
+                            world.world.debug.draw_point(route[route_counter+4][0].transform.location,
+                                                         color=carla.Color(r=0, g=255, b=0), size=0.1,
+                                                         life_time=120.0)
                         route_distance = wp.transform.location.distance(ego_carla_loc)
                         if route_distance <= 2:
                             route_counter += 1
-                        control = gps_pid(wp, 15, b_controller)
+                        if final_wp and route_counter == len(route)-2:
+                            gps_speed = 0
+                        elif final_wp and route_counter < len(route)-2:
+                            gps_speed = 10
+                        else:
+                            gps_speed = 20
+                        control = gps_pid(wp, gps_speed, b_controller)
                         world.player.apply_control(control)
 
 

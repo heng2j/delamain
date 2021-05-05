@@ -55,8 +55,11 @@ def debug_view(*sensors, text=[1.0]):
                               cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
     debug_image = cv2.putText(np.array(debug_image), 'Control Type: ' + str(text[1]), (15, 30),
                               cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
-    # debug_image = cv2.putText(np.array(debug_image), 'Route: ' + str(text[2]), (15, 45),
-    #                           cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
+    debug_image = cv2.putText(np.array(debug_image), 'GPS Waypoint Distance: ' + str(text[2]), (15, 45),
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
+    debug_image = cv2.putText(np.array(debug_image), 'Waypoint ID: ' + str("Inactive" if not text[3] else text[3]), (15, 60),
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
+
 
     #########################################################################
     cv2.imshow("debug view", debug_image)
