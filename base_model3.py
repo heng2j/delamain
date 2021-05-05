@@ -31,7 +31,7 @@ from intersection.global_route_planner_dao import GlobalRoutePlannerDAO
 from intersection.global_route_planner import GlobalRoutePlanner
 
 from gps_nav.nav_a2b import *
-from gps_nav.geo_to_loc import geo_init, geo_to_location
+from gps_nav.geo_to_loc import geo_init
 
 
 # ==============================================================================
@@ -64,7 +64,6 @@ def game_loop(args):
         # TODO - features init/misc
         a_controller = PurePursuitPlusPID()
         cg, ld = lane_track_init()
-        geo_model = geo_init()
         b_controller = setup_gps_pid(world.player)
         routeplanner = GlobalRoutePlanner(GlobalRoutePlannerDAO(world.world.get_map(), 2))
         routeplanner.setup()
@@ -112,16 +111,17 @@ def game_loop(args):
 
         FPS = 30
         speed, traj = 0, np.array([])
-        df_carla_path, wp_counter, warning_timer = pd.DataFrame(), 0, 0.0
-        time_cycle, cycles = 0.0, 30
+        df_carla_path, wp_counter, final_wp = pd.DataFrame(), 0, False
+        time_cycle, cycles, wp_cycle = 0.0, 30, 0.0
         route = False
-        pid_type, junction = "N/A", False
+        pid_type, visual_nav = "N/A", True
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
         with CarlaSyncMode(world.world, cam_rgb, cam_seg, gnss, fps=FPS) as sync_mode:
             while True:
                 clock.tick_busy_loop(FPS)
                 time_cycle += clock.get_time()
+                wp_cycle += clock.get_time()
                 if controller.parse_events(client, world, clock):
                     return
                 # Advance the simulation and wait for the data.
@@ -147,26 +147,22 @@ def game_loop(args):
                         # next waypoint
                         row = df_carla_path.iloc[wp_counter]
                         next_carla_loc = carla.Location(x=row["x"], y=row["y"], z=row["z"])
-                        if junction:
-                            route = routeplanner.trace_route(ego_carla_loc, next_carla_loc)[0:6]
-                            route_counter = 1
 
-                        distance = next_carla_loc.distance(ego_carla_loc)
-                        if distance <= 2.0:
-                            wp_counter += 2
+                        # arrive @ next waypoint
+                        wp_distance = next_carla_loc.distance(ego_carla_loc)
+                        if wp_distance <= 5.0:
+                            wp_counter += 1
                             route = None
-                            if wp_counter == len(df_carla_path):
+                            # last waypoint
+                            if wp_counter == len(df_carla_path)-1:
                                 wp_counter = 0
-                                world.autopilot_flag = False
+                                visual_nav = False
+                                final_wp = True
+                                route = routeplanner.trace_route(ego_carla_loc, next_carla_loc)
+                                route_counter = 1
+
 
                     ego_carla_loc = world.player.get_location()
-                    if poly_warning and warning_timer >= 500.0:
-                        junction = True
-                    elif poly_warning:
-                        warning_timer += clock.get_time()
-                    else:
-                        junction = False
-                        warning_timer = 0.0
 
                     # dgmd_mask = image_pipeline(image_seg)
 
@@ -177,29 +173,40 @@ def game_loop(args):
 
                     # ==================================================================
                     # Debug data
-                    debug_view(image_rgb, image_seg, lane_mask, text=[junction, pid_type, bool(route)])
+                    debug_view(image_rgb, image_seg, lane_mask, text=[not visual_nav, pid_type])
 
                 # PID Controls
-                # visual based pid - lane
-                if world.autopilot_flag and traj.any() and not junction and not route:
-                    pid_type = "visual"
-                    speed = get_speed(world.player)
-                    throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1./FPS)
-                    send_control(world.player, throttle, steer, 0)
-                # gps based pid - intersection
-                elif world.autopilot_flag and route:
-                    if route_counter == len(route)-1:
+                if world.autopilot_flag:
+                    if wp_cycle >= 1000.0 and not final_wp:
+                        wp_cycle = 0.0
+                        visual_nav = not world.world.get_map().get_waypoint(ego_carla_loc).next(2)[0].is_junction
+                    if visual_nav and traj.any():
+                        pid_type = "visual"
+                        speed = get_speed(world.player)
+                        throttle, steer = a_controller.get_control(traj, speed, desired_speed=15, dt=1. / FPS)
+                        send_control(world.player, throttle, steer, 0)
                         route = None
-                        continue
-                    pid_type = "gps"
-                    wp = route[route_counter][0]
-                    world.world.debug.draw_point(route[route_counter+1][0].transform.location, color=carla.Color(r=255, g=0, b=0), size=0.4,
-                                           life_time=120.0)
-                    route_distance = wp.transform.location.distance(ego_carla_loc)
-                    if route_distance <= 2:
-                        route_counter += 1
-                    control = gps_pid(wp, 20, b_controller)
-                    world.player.apply_control(control)
+                    elif final_wp:
+                        control = gps_pid(route[-1][0], 0, b_controller)
+                        world.player.apply_control(control)
+                    else:
+                        pid_type = "gps"
+                        if not route:
+                            route = routeplanner.trace_route(ego_carla_loc, next_carla_loc)
+                            route_counter = 1
+                        if route_counter == len(route)-2:
+                            route = None
+                            continue
+                        pid_type = "gps"
+                        wp = route[route_counter][0]
+                        world.world.debug.draw_point(route[route_counter + 2][0].transform.location,
+                                                     color=carla.Color(r=0, g=255, b=0), size=0.1,
+                                                     life_time=120.0)
+                        route_distance = wp.transform.location.distance(ego_carla_loc)
+                        if route_distance <= 2:
+                            route_counter += 1
+                        control = gps_pid(wp, 15, b_controller)
+                        world.player.apply_control(control)
 
 
                 world.tick(clock)
