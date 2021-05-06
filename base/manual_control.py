@@ -8,30 +8,22 @@ Use ARROWS or WASD keys for control.
     A/D          : steer left/right
     Q            : toggle reverse
     Space        : hand-brake
+
     P            : toggle autopilot
-    M            : toggle manual transmission
-    ,/.          : gear up/down
-    CTRL + W     : toggle constant velocity mode at 60 km/h
+    I            : activate GPS
 
     L            : toggle next light type
     SHIFT + L    : toggle high beam
     Z/X          : toggle right/left blinker
-    I            : toggle interior light
 
     TAB          : change sensor position
     ` or N       : next sensor
     [1-9]        : change to sensor [1-9]
     G            : toggle radar visualization
     C            : change weather (Shift+C reverse)
-    Backspace    : change vehicle
 
     R            : toggle recording images to disk
-
-    CTRL + R     : toggle recording of simulation (replacing any previous)
-    CTRL + P     : start replaying last recorded simulation
-    CTRL + +     : increments the start time of the replay by 1 second (+SHIFT = 10 seconds)
-    CTRL + -     : decrements the start time of the replay by 1 second (+SHIFT = 10 seconds)
-
+    T            : save image
     F1           : toggle HUD
     H/?          : toggle help
     ESC          : quit
@@ -67,6 +59,7 @@ from pygame.locals import K_p
 from pygame.locals import K_q
 from pygame.locals import K_r
 from pygame.locals import K_s
+from pygame.locals import K_t
 from pygame.locals import K_w
 from pygame.locals import K_l
 from pygame.locals import K_i
@@ -144,15 +137,17 @@ class KeyboardControl(object):
                     world.camera_manager.set_sensor(event.key - 1 - K_0)
                 elif event.key == K_r and not (pygame.key.get_mods() & KMOD_CTRL):
                     world.camera_manager.toggle_recording()
-                elif event.key == K_r and (pygame.key.get_mods() & KMOD_CTRL):
-                    if (world.recording_enabled):
-                        client.stop_recorder()
-                        world.recording_enabled = False
-                        world.hud.notification("Recorder is OFF")
-                    else:
-                        client.start_recorder("manual_recording.rec")
-                        world.recording_enabled = True
-                        world.hud.notification("Recorder is ON")
+                # elif event.key == K_r and (pygame.key.get_mods() & KMOD_CTRL):
+                #     if (world.recording_enabled):
+                #         client.stop_recorder()
+                #         world.recording_enabled = False
+                #         world.hud.notification("Recorder is OFF")
+                #     else:
+                #         client.start_recorder("manual_recording.rec")
+                #         world.recording_enabled = True
+                #         world.hud.notification("Recorder is ON")
+                elif event.key == K_t:
+                    world.save_img = True
                 elif event.key == K_p and (pygame.key.get_mods() & KMOD_CTRL):
                     # stop recorder
                     client.stop_recorder()
@@ -194,6 +189,7 @@ class KeyboardControl(object):
                     elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
                         self._autopilot_enabled = not self._autopilot_enabled
                         # world.player.set_autopilot(self._autopilot_enabled)
+                        world.autopilot_flag = True if self._autopilot_enabled else False
                         world.hud.notification(
                             'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
@@ -218,7 +214,14 @@ class KeyboardControl(object):
                             current_lights ^= carla.VehicleLightState.LowBeam
                             current_lights ^= carla.VehicleLightState.Fog
                     elif event.key == K_i:
-                        current_lights ^= carla.VehicleLightState.Interior
+                        # current_lights ^= carla.VehicleLightState.Interior
+                        # Modification
+                        world.gps_flag = True
+                        # world.gps_flag = not world.gps_flag
+                        # if world.gps_flag:
+                        #     world.gps_vis = True
+                        world.hud.notification(
+                            'GPS Navigation %s' % ('On' if world.gps_flag else 'Off'))
                     elif event.key == K_z:
                         current_lights ^= carla.VehicleLightState.LeftBlinker
                     elif event.key == K_x:

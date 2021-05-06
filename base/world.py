@@ -40,6 +40,10 @@ class World(object):
         self.recording_enabled = False
         self.recording_start = 0
         self.constant_velocity_enabled = False
+        self.gps_flag = False
+        self.gps_vis = True
+        self.autopilot_flag = False
+        self.save_img = False
 
     def restart(self):
         self.player_max_speed = 1.589
@@ -63,9 +67,20 @@ class World(object):
                 print('There are no spawn points available in your map/town.')
                 print('Please add some Vehicle Spawn Point to your UE4 scene.')
                 sys.exit(1)
-            spawn_points = self.map.get_spawn_points()
-            spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+            # spawn_points = self.map.get_spawn_points()
+            # spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+
+            # Demo spawn point
+            #TODO adjust to most left lane
+            spawn_point = carla.Transform(carla.Location(
+                # x=121.61898803710938, y=187.5887451171875, z=1.0), carla.Rotation(yaw=180) # Location in Town02
+                # x=130.81553649902344, y=65.8092269897461, z=1.0), carla.Rotation(yaw=-0)  # Location in Town03
+                # x = 117.7, y = 62.5, z = 1.0), carla.Rotation(yaw=-0)  # Location in Town03
+                # x = 157.5, y = -141.0, z = 8.0), carla.Rotation(yaw=-90)  # Location in Town03
+                x = 11.3, y = 217.5, z = 1.0), carla.Rotation(yaw=-30)  # Location in Town03
+            )
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+            print('created %s' % self.player.type_id)
         # Set up the sensors.
         self.collision_sensor = CollisionSensor(self.player, self.hud)
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
