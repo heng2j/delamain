@@ -31,37 +31,28 @@ from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
 from lane_tracking.dgmd_track import image_pipeline
 
-
-# Car chasing imports
-# New imports
-from car_chasing.DrivingControl import DrivingControl
-from car_chasing.DrivingControlAdvanced import DrivingControlAdvanced
-from car_chasing.CarDetector import CarDetector
-from car_chasing.SemanticSegmentation import SemanticSegmentation
+from car_chasing.car_chasing_agent import car_chasing_init, agent_init
+from car_chasing.car_chasing_controller import ChaseControl
 
 
 # ==============================================================================
-# -- Car Chasing Configuration Variables ---------------------------------------------------------------
+# -- Car Chasing Configuration Variables ---------------------------------------
 # ==============================================================================
-
 optimalDistance = 8
 nOfFramesToSkip = 0
 extrapolate = True
-LP_FREQUENCY_DIVISOR = 2
+behaviour_planner_frequency_divisor = 2
 y_offset = 10
 
 # For object avoidance
 obsticle_vehicleSpawned = False
 
-
 # ==============================================================================
-# -- Car Chasing Objects ---------------------------------------------------------------
+# -- Car Chasing Global Objects ---------------------------------------
 # ==============================================================================
+# Add ChaseControl, should be initalized outside the game loop for efficiency 
+chaseControl = ChaseControl(optimalDistance=optimalDistance, nOfFramesToSkip=nOfFramesToSkip, extrapolate=extrapolate, behaviour_planner_frequency_divisor=behaviour_planner_frequency_divisor)
 
-carDetector = CarDetector()
-drivingControl = DrivingControl(optimalDistance=optimalDistance)
-drivingControlAdvanced = DrivingControlAdvanced(optimalDistance=optimalDistance)
-semantic = SemanticSegmentation()
 
 
 # ==============================================================================
@@ -91,9 +82,15 @@ def game_loop(args):
         sensors = []
 
         # ==================================================================
-        # TODO - features init/misc
         a_controller = PurePursuitPlusPID()
         cg, ld = lane_track_init()
+
+
+        # ======================= Car Chasing Objects ========================
+        #  Add trailing vehicle
+        # TODO Set trailing posisiton. By default it is set to be relative to world.player
+        trailing_vehicle = car_chasing_init(world=world, position=None, y_offset=y_offset)
+        actor_list.append(trailing_vehicle)
 
         # TODO - add sensors
         blueprint_library = world.world.get_blueprint_library()
@@ -125,33 +122,7 @@ def game_loop(args):
         # ==================================================================
 
 
-        # ======================= Add Trailing Car =========================
-
-        # Set Trailing vehicle
-        m = world.world.get_map()
-
-        trailing_vehicle_bp = blueprint_library.filter('vehicle.dodge_charger.police')[0]
-        trailing_vehicle = world.world.spawn_actor(
-            trailing_vehicle_bp,
-            m.get_spawn_points()[90])
-        
-        actor_list.append(trailing_vehicle)
-
-        # Set position for trailing vehicle
-        lead_vehicle_transfrom = world.player.get_transform()
-
-
-        # TODO - Set trailing offset  
-        start_pose = carla.Transform()
-        start_pose.rotation = lead_vehicle_transfrom.rotation
-        start_pose.location.x = lead_vehicle_transfrom.location.x 
-        start_pose.location.y =  lead_vehicle_transfrom.location.y + y_offset 
-        start_pose.location.z =  lead_vehicle_transfrom.location.z
-
-        trailing_vehicle.set_transform(start_pose)
-        trailing_vehicle.set_simulate_physics(True)
-
-
+        # --- Adding sensors to trailing_vehicle
         # Adding RGB camera
         trail_cam_rgb_blueprint = world.world.get_blueprint_library().find('sensor.camera.rgb')
         trail_cam_rgb_blueprint.set_attribute('fov', '90')
@@ -169,8 +140,7 @@ def game_loop(args):
             attach_to=trailing_vehicle)
         actor_list.append(trail_cam_seg)
         sensors.append(trail_cam_seg)
-
-        
+       
         # ==================================================================
         frame = 0 
         FPS = 30
@@ -192,33 +162,14 @@ def game_loop(args):
 
 
                 # ======================= Car Chasing Section =========================
+                trailing_steer, trailing_throttle, real_dist = chaseControl.behaviour_planner(leading_vehicle=world.player, 
+                                                                                    trailing_vehicle=trailing_vehicle, 
+                                                                                    trailing_image_seg=trailing_image_seg, 
+                                                                                    trail_cam_rgb=trail_cam_rgb,
+                                                                                    frame=frame)
+                
+                send_control(trailing_vehicle, trailing_throttle, trailing_steer, 0)
 
-                # detect car in image with semantic segnmentation camera
-                carInTheImage = semantic.IsThereACarInThePicture(trailing_image_seg)
-
-                leading_location = world.player.get_transform()
-                trailing_location = trailing_vehicle.get_transform()
-
-                newX, newY = carDetector.CreatePointInFrontOFCar(trailing_location.location.x, trailing_location.location.y,
-                                                                     trailing_location.rotation.yaw)
-
-                angle = carDetector.getAngle([trailing_location.location.x, trailing_location.location.y], [newX, newY],
-                                                [leading_location.location.x, leading_location.location.y])
-
-                possibleAngle = 0
-                drivableIndexes = []
-
-                bbox, predicted_distance,predicted_angle = carDetector.getDistance(world.player, trail_cam_rgb, carInTheImage, extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
-
-                if frame % LP_FREQUENCY_DIVISOR == 0:
-                    # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
-                    predicted_angle, drivableIndexes = semantic.FindPossibleAngle(trailing_image_seg, bbox, predicted_angle) 
-
-                steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
-
-                send_control(trailing_vehicle, throttle, steer, 0)
-
-                real_dist = trailing_location.location.distance(leading_location.location)
                 # ==================================================================
 
 
@@ -236,6 +187,7 @@ def game_loop(args):
                     except:
                         continue
                     # ==================================================================
+                    # TODO - features init/ module
                     # Debug data
                     # debug_view(image_rgb, image_seg, lane_mask)
                     # debug_view(image_rgb, image_seg)
