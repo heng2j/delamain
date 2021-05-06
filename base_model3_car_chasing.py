@@ -54,17 +54,9 @@ semantic = SemanticSegmentation()
 # ==============================================================================
 
 optimalDistance = 8
-
-followDrivenPath = True
-evaluateChasingCar = True
-record = False
-chaseMode = True
-followMode = False
 nOfFramesToSkip = 0
-
 extrapolate = True
 LP_FREQUENCY_DIVISOR = 2
-
 y_offset = 10
 
 # For object avoidance
