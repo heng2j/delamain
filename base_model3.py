@@ -203,7 +203,7 @@ def game_loop(args):
                         route_distance = wp.transform.location.distance(ego_carla_loc)
                         if route_distance <= 2:
                             route_counter += 1
-                        elif final_wp and route_distance <= 2:
+                        elif final_wp and route_distance <= 5:
                             gps_speed = 0
                             world.autopilot_flag = False
                         else:
