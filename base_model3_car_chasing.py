@@ -41,47 +41,19 @@ from car_chasing.SemanticSegmentation import SemanticSegmentation
 
 
 # ==============================================================================
-# -- Car Chasing Classes ---------------------------------------------------------------
+# -- Car Chasing Objects ---------------------------------------------------------------
 # ==============================================================================
 
-
-
-# New Classes
-class Evaluation():
-    def __init__(self):
-        self.sumMAE = 0
-        self.sumRMSE = 0
-        self.n_of_frames = 0
-        self.n_of_collisions = 0
-        self.history = []
-
-    def AddError(self, distance, goalDistance):
-        self.n_of_frames += 1
-        self.sumMAE += abs(goalDistance-distance)
-        self.sumRMSE += abs(goalDistance-distance)*abs(goalDistance-distance)
-
-    def WriteIntoFileFinal(self, filename, driveName):
-        if self.n_of_frames > 0:
-            self.sumMAE = self.sumMAE / float(self.n_of_frames)
-            self.sumRMSE = self.sumRMSE / float(self.n_of_frames)
-
-        with open(filename,'a') as f:
-            f.write(str(driveName)+', '+str(self.sumMAE)+', '+str(self.sumRMSE)+', '+str(self.n_of_collisions)+'\n')
-
-    def LoadHistoryFromFile(self, fileName):
-        self.history = pickle.load( open(fileName, "rb"))
-
-    def CollisionHandler(self,event):
-        self.n_of_collisions += 1
-
-
+carDetector = CarDetector()
+drivingControl = DrivingControl(optimalDistance=optimalDistance)
+drivingControlAdvanced = DrivingControlAdvanced(optimalDistance=optimalDistance)
+semantic = SemanticSegmentation()
 
 # ==============================================================================
 # -- Car Chasing Configuration Variables ---------------------------------------------------------------
 # ==============================================================================
 
 optimalDistance = 8
-
 
 followDrivenPath = True
 evaluateChasingCar = True
@@ -90,28 +62,13 @@ chaseMode = True
 followMode = False
 nOfFramesToSkip = 0
 
-# drivesDir = '../car_chasing/drives'
-# drivesFileNames = os.listdir(drivesDir)
-# drivesFileNames.sort()
-
-# drivesFileNames = ['ride5.p']  #   ['ride8.p']  ['ride10.p']  for testing advance angle turns # turnel ['ride15.p']  
-
-
-# New Variables
 extrapolate = True
-record = False
-counter = 1
-vehicleToFollowSpawned = False
-obsticle_vehicleSpawned = False
 LP_FREQUENCY_DIVISOR = 2
 
+y_offset = 10
 
-# New objects
-carDetector = CarDetector()
-drivingControl = DrivingControl(optimalDistance=optimalDistance)
-drivingControlAdvanced = DrivingControlAdvanced(optimalDistance=optimalDistance)
-evaluation = Evaluation()
-semantic = SemanticSegmentation()
+# For object avoidance
+obsticle_vehicleSpawned = False
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -174,7 +131,6 @@ def game_loop(args):
         # ==================================================================
 
 
-
         # ======================= Add Trailing Car =========================
 
         # Set Trailing vehicle
@@ -192,8 +148,6 @@ def game_loop(args):
 
 
         # TODO - Set trailing offset  
-        y_offset = 50
-
         start_pose = carla.Transform()
         start_pose.rotation = lead_vehicle_transfrom.rotation
         start_pose.location.x = lead_vehicle_transfrom.location.x 
@@ -204,14 +158,7 @@ def game_loop(args):
         trailing_vehicle.set_simulate_physics(True)
 
 
-        # Set sensors for trailing vehicle
-        # Collision sensor
-        collision_sensor = world.world.spawn_actor(blueprint_library.find('sensor.other.collision'),
-                                                carla.Transform(), attach_to=trailing_vehicle)
-        collision_sensor.listen(lambda event: evaluation.CollisionHandler(event))
-        actor_list.append(collision_sensor)
-
-        # RGB camera
+        # Adding RGB camera
         trail_cam_rgb_blueprint = world.world.get_blueprint_library().find('sensor.camera.rgb')
         trail_cam_rgb_blueprint.set_attribute('fov', '90')
         trail_cam_rgb = world.world.spawn_actor(
@@ -221,7 +168,7 @@ def game_loop(args):
         actor_list.append(trail_cam_rgb)
         sensors.append(trail_cam_rgb)
 
-        # Segmentation camera
+        # Adding Segmentation camera
         trail_cam_seg = world.world.spawn_actor(
             blueprint_library.find('sensor.camera.semantic_segmentation'),
             carla.Transform(carla.Location(x=1.5, z=1.4,y=0), carla.Rotation(pitch=0)), #5,3,0 # -0.3
@@ -255,8 +202,6 @@ def game_loop(args):
                 # detect car in image with semantic segnmentation camera
                 carInTheImage = semantic.IsThereACarInThePicture(trailing_image_seg)
 
-                line = []
-
                 leading_location = world.player.get_transform()
                 trailing_location = trailing_vehicle.get_transform()
 
@@ -268,7 +213,7 @@ def game_loop(args):
 
                 possibleAngle = 0
                 drivableIndexes = []
-                # bbox = []
+
                 bbox, predicted_distance,predicted_angle = carDetector.getDistance(world.player, trail_cam_rgb, carInTheImage, extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
 
                 if frame % LP_FREQUENCY_DIVISOR == 0:
@@ -278,8 +223,6 @@ def game_loop(args):
                 steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
 
                 send_control(trailing_vehicle, throttle, steer, 0)
-
-                # speed = np.linalg.norm(carla_vec_to_np_array(vehicle.get_velocity()))
 
                 real_dist = trailing_location.location.distance(leading_location.location)
                 # ==================================================================
