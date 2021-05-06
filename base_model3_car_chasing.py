@@ -41,15 +41,6 @@ from car_chasing.SemanticSegmentation import SemanticSegmentation
 
 
 # ==============================================================================
-# -- Car Chasing Objects ---------------------------------------------------------------
-# ==============================================================================
-
-carDetector = CarDetector()
-drivingControl = DrivingControl(optimalDistance=optimalDistance)
-drivingControlAdvanced = DrivingControlAdvanced(optimalDistance=optimalDistance)
-semantic = SemanticSegmentation()
-
-# ==============================================================================
 # -- Car Chasing Configuration Variables ---------------------------------------------------------------
 # ==============================================================================
 
@@ -61,6 +52,17 @@ y_offset = 10
 
 # For object avoidance
 obsticle_vehicleSpawned = False
+
+
+# ==============================================================================
+# -- Car Chasing Objects ---------------------------------------------------------------
+# ==============================================================================
+
+carDetector = CarDetector()
+drivingControl = DrivingControl(optimalDistance=optimalDistance)
+drivingControlAdvanced = DrivingControlAdvanced(optimalDistance=optimalDistance)
+semantic = SemanticSegmentation()
+
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -210,7 +212,7 @@ def game_loop(args):
 
                 if frame % LP_FREQUENCY_DIVISOR == 0:
                     # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
-                    predicted_angle, drivableIndexes = semantic.FindPossibleAngle(trailing_image_seg,bbox,predicted_angle) 
+                    predicted_angle, drivableIndexes = semantic.FindPossibleAngle(trailing_image_seg, bbox, predicted_angle) 
 
                 steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
 
