@@ -387,6 +387,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # snapshot, image_rgb, image_segmentation = tick_response
                 snapshot, img_rgb, image_segmentation = sync_mode.tick(timeout=2.0)
 
+                print("type(image_segmentation): ", type(image_segmentation))
+
                 # detect car in image with semantic segnmentation camera
                 carInTheImage = semantic.IsThereACarInThePicture(image_segmentation)
 

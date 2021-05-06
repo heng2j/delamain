@@ -1,5 +1,6 @@
 import math
 from car_chasing.client_bounding_boxes import ClientSideBoundingBoxes
+# from client_bounding_boxes import ClientSideBoundingBoxes
 import numpy as np
 import cv2
 import random
@@ -121,7 +122,6 @@ class CarDetector:
         calibration[1, 2] = VIEW_HEIGHT / 2.0
         calibration[0, 0] = calibration[1, 1] = VIEW_WIDTH / (2.0 * np.tan(VIEW_FOV * np.pi / 360.0))
         camera.calibration = calibration # intrinsic camera matrix
-
         bounding_boxes = self.boundingBoxes.get_bounding_boxes([vehicle], camera) # bounding boxes in images
         bounding_boxes = self.CreateBoundBoxMistakes(bounding_boxes,nOfFramesToSkip)
         if not carInTheImage:

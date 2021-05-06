@@ -88,6 +88,7 @@ evaluateChasingCar = True
 record = False
 chaseMode = True
 followMode = False
+nOfFramesToSkip = 0
 
 # drivesDir = '../car_chasing/drives'
 # drivesFileNames = os.listdir(drivesDir)
@@ -100,9 +101,9 @@ followMode = False
 extrapolate = True
 record = False
 counter = 1
-sensors = []
 vehicleToFollowSpawned = False
 obsticle_vehicleSpawned = False
+LP_FREQUENCY_DIVISOR = 2
 
 
 # New objects
@@ -196,7 +197,7 @@ def game_loop(args):
         start_pose = carla.Transform()
         start_pose.rotation = lead_vehicle_transfrom.rotation
         start_pose.location.x = lead_vehicle_transfrom.location.x 
-        start_pose.location.y =  lead_vehicle_transfrom.location.y - y_offset 
+        start_pose.location.y =  lead_vehicle_transfrom.location.y + y_offset 
         start_pose.location.z =  lead_vehicle_transfrom.location.z
 
         trailing_vehicle.set_transform(start_pose)
@@ -211,35 +212,32 @@ def game_loop(args):
         actor_list.append(collision_sensor)
 
         # RGB camera
-        camera_rgb_blueprint = world.world.get_blueprint_library().find('sensor.camera.rgb')
-        camera_rgb_blueprint.set_attribute('fov', '90')
-        camera_rgb = world.world.spawn_actor(
-           camera_rgb_blueprint,
+        trail_cam_rgb_blueprint = world.world.get_blueprint_library().find('sensor.camera.rgb')
+        trail_cam_rgb_blueprint.set_attribute('fov', '90')
+        trail_cam_rgb = world.world.spawn_actor(
+           trail_cam_rgb_blueprint,
             carla.Transform(carla.Location(x=1.5, z=1.4,y=0.3), carla.Rotation(pitch=0)),
             attach_to=trailing_vehicle)
-        actor_list.append(camera_rgb)
-        sensors.append(camera_rgb)
+        actor_list.append(trail_cam_rgb)
+        sensors.append(trail_cam_rgb)
 
         # Segmentation camera
-        camera_segmentation = world.world.spawn_actor(
+        trail_cam_seg = world.world.spawn_actor(
             blueprint_library.find('sensor.camera.semantic_segmentation'),
             carla.Transform(carla.Location(x=1.5, z=1.4,y=0), carla.Rotation(pitch=0)), #5,3,0 # -0.3
             attach_to=trailing_vehicle)
-        actor_list.append(camera_segmentation)
-        sensors.append(camera_segmentation)
-
+        actor_list.append(trail_cam_seg)
+        sensors.append(trail_cam_seg)
 
         
         # ==================================================================
-
-
-
+        frame = 0 
         FPS = 30
         speed, traj = 0, np.array([])
         time_cycle, cycles = 0.0, 30
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
-        with CarlaSyncMode(world.world, cam_rgb, cam_seg, fps=FPS) as sync_mode:
+        with CarlaSyncMode(world.world, *sensors, fps=FPS) as sync_mode:
             while True:
                 clock.tick_busy_loop(FPS)
                 time_cycle += clock.get_time()
@@ -247,8 +245,45 @@ def game_loop(args):
                     return
                 # Advance the simulation and wait for the data.
                 tick_response = sync_mode.tick(timeout=2.0)
+                
                 # Data retrieval
-                snapshot, image_rgb, image_seg = tick_response
+                snapshot, image_rgb, image_seg, trailing_image_rgb, trailing_image_seg = tick_response
+
+
+                # ======================= Car Chasing Section =========================
+
+                # detect car in image with semantic segnmentation camera
+                carInTheImage = semantic.IsThereACarInThePicture(trailing_image_seg)
+
+                line = []
+
+                leading_location = world.player.get_transform()
+                trailing_location = trailing_vehicle.get_transform()
+
+                newX, newY = carDetector.CreatePointInFrontOFCar(trailing_location.location.x, trailing_location.location.y,
+                                                                     trailing_location.rotation.yaw)
+
+                angle = carDetector.getAngle([trailing_location.location.x, trailing_location.location.y], [newX, newY],
+                                                [leading_location.location.x, leading_location.location.y])
+
+                possibleAngle = 0
+                drivableIndexes = []
+                # bbox = []
+                bbox, predicted_distance,predicted_angle = carDetector.getDistance(world.player, trail_cam_rgb, carInTheImage, extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
+
+                if frame % LP_FREQUENCY_DIVISOR == 0:
+                    # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
+                    predicted_angle, drivableIndexes = semantic.FindPossibleAngle(trailing_image_seg,bbox,predicted_angle) 
+
+                steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
+
+                send_control(trailing_vehicle, throttle, steer, 0)
+
+                # speed = np.linalg.norm(carla_vec_to_np_array(vehicle.get_velocity()))
+
+                real_dist = trailing_location.location.distance(leading_location.location)
+                # ==================================================================
+
 
                 if time_cycle >= 1000.0/cycles:
                     time_cycle = 0.0
@@ -279,6 +314,8 @@ def game_loop(args):
                 world.tick(clock)
                 world.render(display)
                 pygame.display.flip()
+
+                frame +=1
     finally:
         if (world and world.recording_enabled):
             client.stop_recorder()

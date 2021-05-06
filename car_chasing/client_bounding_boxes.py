@@ -83,7 +83,6 @@ class ClientSideBoundingBoxes(object):
         """
         Creates 3D bounding boxes based on carla vehicle list and camera.
         """
-
         bounding_boxes = [ClientSideBoundingBoxes.get_bounding_box(vehicle, camera) for vehicle in vehicles]
         # filter objects behind camera
         bounding_boxes = [bb for bb in bounding_boxes if all(bb[:, 2] > 0)]
@@ -154,7 +153,7 @@ class ClientSideBoundingBoxes(object):
         """
         Transforms coordinates of a vehicle bounding box to sensor.
         """
-
+        
         world_cord = ClientSideBoundingBoxes._vehicle_to_world(cords, vehicle)
         sensor_cord = ClientSideBoundingBoxes._world_to_sensor(world_cord, sensor)
         return sensor_cord
