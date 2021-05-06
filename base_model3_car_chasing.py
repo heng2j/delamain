@@ -31,7 +31,7 @@ from lane_tracking.cores.control.pure_pursuit import PurePursuitPlusPID
 from lane_tracking.lane_track import lane_track_init, get_trajectory_from_lane_detector, get_speed, send_control
 from lane_tracking.dgmd_track import image_pipeline
 
-from car_chasing.car_chasing_agent import car_chasing_init, agent_init
+from car_chasing.car_chasing_agent import chasing_car_init, agent_init
 from car_chasing.car_chasing_controller import ChaseControl
 
 
@@ -89,7 +89,7 @@ def game_loop(args):
         # ======================= Car Chasing Objects ========================
         #  Add trailing vehicle
         # TODO Set trailing posisiton. By default it is set to be relative to world.player
-        trailing_vehicle = car_chasing_init(world=world, position=None, y_offset=y_offset)
+        trailing_vehicle = chasing_car_init(world=world, position=None, y_offset=y_offset)
         actor_list.append(trailing_vehicle)
 
         # TODO - add sensors

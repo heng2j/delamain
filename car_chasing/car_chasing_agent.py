@@ -12,7 +12,7 @@ except IndexError:
 
 import carla
 
-def car_chasing_init(world: carla.World, position: carla.Transform=None, y_offset: int= 5 ) -> carla.Actor:
+def chasing_car_init(world: carla.World, position: carla.Transform=None, y_offset: int= 5 ) -> carla.Actor:
     """[summary]
 
     Args:
