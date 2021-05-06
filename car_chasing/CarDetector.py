@@ -1,5 +1,5 @@
 import math
-from client_bounding_boxes import ClientSideBoundingBoxes
+from car_chasing.client_bounding_boxes import ClientSideBoundingBoxes
 import numpy as np
 import cv2
 import random
