@@ -24,7 +24,7 @@ class ChaseControl():
     """
 
     
-    def __init__(self, optimalDistance: int, nOfFramesToSkip: int, extrapolate: bool, behaviour_planner_frequency_divisor: int ):
+    def __init__(self, optimalDistance=8, nOfFramesToSkip=0, extrapolate=True, behaviour_planner_frequency_divisor=2 ):
         """[summary]
 
         Args:

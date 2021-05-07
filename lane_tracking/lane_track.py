@@ -27,17 +27,24 @@ def lane_track_init():
 
 def get_trajectory_from_lane_detector(ld, image):
     """
+    polyfit excepts means junction
     param: ld = lane detector
     image: windshield rgb cam
     return: traj
     """
     image_arr = carla_img_to_array(image)
-    poly_left, poly_right, debug = ld(image_arr)
-    x = np.arange(-2,60,1.0)
-    y = -0.5*(poly_left(x)+poly_right(x))
-    x += 0.5
-    traj = np.stack((x,y)).T
-    return traj, debug
+    try:
+        poly_left, poly_right, debug = ld(image_arr)
+        x = np.arange(-2,60,1.0)
+        y = -0.5*(poly_left(x)+poly_right(x))
+        x += 0.5
+        traj = np.stack((x,y)).T
+        warning = False
+    except:
+        warning = True
+        traj = np.array([])
+        debug = np.array([])
+    return traj, debug, warning
 
 
 def get_speed(vehicle):
