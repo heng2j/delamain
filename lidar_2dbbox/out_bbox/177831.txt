@@ -1,4 +1,0 @@
-{
-    "bboxes": [],
-    "vehicle_class": []
-}
