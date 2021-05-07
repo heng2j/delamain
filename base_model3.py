@@ -192,14 +192,14 @@ def game_loop(args):
                         target_vehicle = world.world.spawn_actor(target_bp, target_transform)
                         target_vehicle.set_autopilot(True)
                         target_spawn = True
-                    # trailing_steer, trailing_throttle, real_dist = chaseControl.behaviour_planner(
-                    #     leading_vehicle=target_vehicle,
-                    #     trailing_vehicle=world.player,
-                    #     trailing_image_seg=image_seg,
-                    #     trail_cam_rgb=image_rgb,
-                    #     frame=frame)
-                    # send_control(target_vehicle, trailing_throttle, trailing_steer, 0)
-                    # frame += 1
+                    trailing_steer, trailing_throttle, real_dist = chaseControl.behaviour_planner(
+                        leading_vehicle=target_vehicle,
+                        trailing_vehicle=world.player,
+                        trailing_image_seg=image_seg,
+                        trail_cam_rgb=image_rgb,
+                        frame=frame)
+                    send_control(target_vehicle, trailing_throttle, trailing_steer, 0)
+                    frame += 1
 
                 # PID Controls
                 if world.autopilot_flag and not world.car_chase:
