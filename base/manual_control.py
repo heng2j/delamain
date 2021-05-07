@@ -11,6 +11,7 @@ Use ARROWS or WASD keys for control.
 
     P            : toggle autopilot
     I            : activate GPS
+    K            : activate car chase
 
     L            : toggle next light type
     SHIFT + L    : toggle high beam
@@ -53,6 +54,7 @@ from pygame.locals import K_c
 from pygame.locals import K_g
 from pygame.locals import K_d
 from pygame.locals import K_h
+from pygame.locals import K_k
 from pygame.locals import K_m
 from pygame.locals import K_n
 from pygame.locals import K_p
@@ -148,6 +150,10 @@ class KeyboardControl(object):
                 #         world.hud.notification("Recorder is ON")
                 elif event.key == K_t:
                     world.save_img = True
+                elif event.key == K_k:
+                    world.car_chase = not world.car_chase
+                    world.hud.notification(
+                        'Car Chase %s' % ('On' if world.car_chase else 'Off'))
                 elif event.key == K_p and (pygame.key.get_mods() & KMOD_CTRL):
                     # stop recorder
                     client.stop_recorder()

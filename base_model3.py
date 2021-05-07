@@ -31,7 +31,9 @@ from intersection.global_route_planner_dao import GlobalRoutePlannerDAO
 from intersection.global_route_planner import GlobalRoutePlanner
 
 from gps_nav.nav_a2b import *
-from gps_nav.geo_to_loc import geo_init
+
+from car_chasing.car_chasing_agent import chasing_car_init, agent_init
+from car_chasing.car_chasing_controller import ChaseControl
 
 
 # ==============================================================================
@@ -67,6 +69,9 @@ def game_loop(args):
         b_controller = setup_gps_pid(world.player)
         routeplanner = GlobalRoutePlanner(GlobalRoutePlannerDAO(world.world.get_map(), 2))
         routeplanner.setup()
+        chaseControl = ChaseControl()
+        # trailing_vehicle = chasing_car_init(world=world, position=None, y_offset=y_offset)
+        # actor_list.append(trailing_vehicle)
 
         # TODO - add sensors
         blueprint_library = world.world.get_blueprint_library()
@@ -109,12 +114,14 @@ def game_loop(args):
         sensors.append(gnss)
         # ==================================================================
 
+        frame = 0
         FPS = 30
         speed, traj = 0, np.array([])
         df_carla_path, wp_counter, final_wp, wp_distance, route_distance = pd.DataFrame(), 0, False, 0, 0
         time_cycle, cycles, wp_cycle = 0.0, 30, 0.0
         route = False
         pid_type, visual_nav = "N/A", True
+        target_spawn = False
         clock = pygame.time.Clock()
         # TODO - add sensor to SyncMode
         with CarlaSyncMode(world.world, cam_rgb, cam_seg, gnss, fps=FPS) as sync_mode:
@@ -137,7 +144,7 @@ def game_loop(args):
                     # TODO - run features
                     traj, lane_mask, poly_warning = get_trajectory_from_lane_detector(ld, image_seg) # stay in lane
                     current_loc = [gnss_data.latitude, gnss_data.longitude, gnss_data.altitude]
-                    if world.gps_flag == True:
+                    if world.gps_flag:
                         df_carla_path = process_nav_a2b(world.world, str(world.world.get_map().name), current_loc,
                                                         destination, dest_fixed=True, graph_vis=world.gps_vis, wp_vis=world.gps_vis)  # put dest_fixed=False if random location
                         world.gps_flag = False
@@ -174,10 +181,28 @@ def game_loop(args):
                     # ==================================================================
                     # Debug data
                     debug_view(image_rgb, image_seg, lane_mask,
-                               text=[not visual_nav, pid_type, round(route_distance, 2), wp_counter])
+                               text=[not visual_nav, pid_type, round(wp_distance, 2), wp_counter, world.car_chase])
+
+                # Car chasing
+                if world.car_chase:
+                    # Spawn target vehicle
+                    if not target_spawn:
+                        target_bp = blueprint_library.find('vehicle.tesla.model3')
+                        target_transform = carla.Transform(carla.Location(x=ego_carla_loc.x+10,y=ego_carla_loc.y,z=1), carla.Rotation(yaw=-180))
+                        target_vehicle = world.world.spawn_actor(target_bp, target_transform)
+                        target_vehicle.set_autopilot(True)
+                        target_spawn = True
+                    # trailing_steer, trailing_throttle, real_dist = chaseControl.behaviour_planner(
+                    #     leading_vehicle=target_vehicle,
+                    #     trailing_vehicle=world.player,
+                    #     trailing_image_seg=image_seg,
+                    #     trail_cam_rgb=image_rgb,
+                    #     frame=frame)
+                    # send_control(target_vehicle, trailing_throttle, trailing_steer, 0)
+                    # frame += 1
 
                 # PID Controls
-                if world.autopilot_flag:
+                if world.autopilot_flag and not world.car_chase:
                     if wp_cycle >= 1000.0 and not final_wp:
                         wp_cycle = 0.0
                         visual_nav = not world.world.get_map().get_waypoint(ego_carla_loc).next(2)[0].is_junction
