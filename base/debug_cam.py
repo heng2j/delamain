@@ -59,6 +59,10 @@ def debug_view(*sensors, text=[1.0]):
                               cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
     debug_image = cv2.putText(np.array(debug_image), 'Waypoint ID: ' + str("Inactive" if not text[3] else text[3]), (15, 60),
                               cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
+    debug_image = cv2.putText(np.array(debug_image), 'Car Chase: ' + str("Off" if not text[4] else "On"), (15, 75),
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
+    debug_image = cv2.putText(np.array(debug_image), 'Auto Pilot: ' + str("Off" if not text[5] else "On"), (15, 90),
+                              cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 255), 1)
 
 
     #########################################################################

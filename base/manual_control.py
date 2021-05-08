@@ -11,6 +11,7 @@ Use ARROWS or WASD keys for control.
 
     P            : toggle autopilot
     I            : activate GPS
+    K            : activate car chase
 
     L            : toggle next light type
     SHIFT + L    : toggle high beam
@@ -53,6 +54,7 @@ from pygame.locals import K_c
 from pygame.locals import K_g
 from pygame.locals import K_d
 from pygame.locals import K_h
+from pygame.locals import K_k
 from pygame.locals import K_m
 from pygame.locals import K_n
 from pygame.locals import K_p
@@ -148,6 +150,10 @@ class KeyboardControl(object):
                 #         world.hud.notification("Recorder is ON")
                 elif event.key == K_t:
                     world.save_img = True
+                elif event.key == K_k:
+                    world.car_chase = not world.car_chase
+                    world.hud.notification(
+                        'Car Chase %s' % ('On' if world.car_chase else 'Off'))
                 elif event.key == K_p and (pygame.key.get_mods() & KMOD_CTRL):
                     # stop recorder
                     client.stop_recorder()
@@ -187,11 +193,10 @@ class KeyboardControl(object):
                     # elif self._control.manual_gear_shift and event.key == K_PERIOD:
                     #     self._control.gear = self._control.gear + 1
                     elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
-                        self._autopilot_enabled = not self._autopilot_enabled
-                        # world.player.set_autopilot(self._autopilot_enabled)
-                        world.autopilot_flag = True if self._autopilot_enabled else False
+                        world.autopilot_flag = not world.autopilot_flag
+                        self._autopilot_enabled = world.autopilot_flag
                         world.hud.notification(
-                            'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
+                            'Autopilot %s' % ('On' if world.autopilot_flag else 'Off'))
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
                         current_lights ^= carla.VehicleLightState.Special1
                     elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
@@ -217,9 +222,6 @@ class KeyboardControl(object):
                         # current_lights ^= carla.VehicleLightState.Interior
                         # Modification
                         world.gps_flag = True
-                        # world.gps_flag = not world.gps_flag
-                        # if world.gps_flag:
-                        #     world.gps_vis = True
                         world.hud.notification(
                             'GPS Navigation %s' % ('On' if world.gps_flag else 'Off'))
                     elif event.key == K_z:
