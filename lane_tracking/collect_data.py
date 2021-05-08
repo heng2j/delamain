@@ -40,7 +40,7 @@ from lane_tracking.util.seg_data_util import mkdir_if_not_exist
 
 
 store_files = True
-town_string = "Town03"
+town_string = "Town05"
 cg = CameraGeometry()
 width = cg.image_width
 height = cg.image_height
@@ -81,25 +81,72 @@ def random_transform_disturbance(transform):
     )
 
 
-# def create_wp(world_map, vehicle):
-#     # waypoint = world_map.get_waypoint(
-#     #     vehicle.get_transform().location,
-#     #     project_to_road=True,
-#     #     lane_type=carla.LaneType.Driving,
-#     # )
-#     # if not waypoint.is_junction:
-#     #     waypoint = waypoint.next(1.0)
-#     waypoint_list = world_map.generate_waypoints(2.0)
-#     print(len(waypoint_list))
+def get_curvature(polyline):
+    dx_dt = np.gradient(polyline[:, 0])
+    dy_dt = np.gradient(polyline[:, 1])
+    d2x_dt2 = np.gradient(dx_dt)
+    d2y_dt2 = np.gradient(dy_dt)
+    curvature = (
+        np.abs(d2x_dt2 * dy_dt - dx_dt * d2y_dt2)
+        / (dx_dt * dx_dt + dy_dt * dy_dt) ** 1.5
+    )
+    # print(curvature)
+    return np.max(curvature)
 
 
-def is_junction_label(wp):
-    forward_wp = wp.next(20.0)[0]
-    back_wp = wp.previous(10.0)[0]
-    if forward_wp.is_junction and back_wp.is_junction and wp.is_junction:
-        return 1.0
-    else:
-        return 0.0
+def create_lane_lines(
+    world_map, vehicle, exclude_junctions=True, only_turns=False
+):
+    waypoint = world_map.get_waypoint(
+        vehicle.get_transform().location,
+        project_to_road=True,
+        lane_type=carla.LaneType.Driving,
+    )
+    # print(str(waypoint.right_lane_marking.type))
+    center_list, left_boundary, right_boundary = [], [], []
+    for _ in range(60):
+        if (
+            str(waypoint.right_lane_marking.type)
+            + str(waypoint.left_lane_marking.type)
+        ).find("NONE") != -1:
+            return None, None, None
+        # if there is a junction on the path, return None
+        if exclude_junctions and waypoint.is_junction:
+            return None, None, None
+        next_waypoints = waypoint.next(1.0)
+        # # if there is a branch on the path, return None
+        if len(next_waypoints) != 1:
+            return None, None, None
+        waypoint = next_waypoints[0]
+        center = carla_vec_to_np_array(waypoint.transform.location)
+        center_list.append(center)
+        offset = (
+            carla_vec_to_np_array(waypoint.transform.get_right_vector())
+            * waypoint.lane_width
+            / 2.0
+        )
+        left_boundary.append(center - offset)
+        right_boundary.append(center + offset)
+
+    max_curvature = get_curvature(np.array(center_list))
+    if max_curvature > 0.005:
+        return None, None, None
+
+    if only_turns and max_curvature < 0.002:
+        return None, None, None
+
+    return (
+        np.array(center_list),
+        np.array(left_boundary),
+        np.array(right_boundary),
+    )
+
+
+def check_inside_image(pixel_array, width, height):
+    ok = (0 < pixel_array[:, 0]) & (pixel_array[:, 0] < width)
+    ok = ok & (0 < pixel_array[:, 1]) & (pixel_array[:, 1] < height)
+    ratio = np.sum(ok) / len(pixel_array)
+    return ratio > 0.5
 
 
 def carla_img_to_array(image):
@@ -118,8 +165,15 @@ def save_img(image, path, raw=False):
         cv2.imwrite(path, array)
 
 
-def save_label(label, path):
-    np.savetxt(path, label)
+def save_label_img(lb_left, lb_right, path):
+    label = np.zeros((height, width, 3))
+    colors = [[1, 1, 1], [2, 2, 2]]
+    for color, lb in zip(colors, [lb_left, lb_right]):
+        cv2.polylines(
+            label, np.int32([lb]), isClosed=False, color=color, thickness=5
+        )
+    label = np.mean(label, axis=2)  # collapse color channels to get gray scale
+    cv2.imwrite(path, label)
 
 
 def get_random_spawn_point(m):
@@ -127,7 +181,7 @@ def get_random_spawn_point(m):
     return m.get_waypoint(pose.location)
 
 
-data_folder = os.path.join("intersection", "data")
+data_folder = os.path.join("", "data", "train_data")
 
 
 def main():
@@ -176,6 +230,9 @@ def main():
             carla.Location(x=0.7, z=cg.height),
             carla.Rotation(pitch=-1 * cg.pitch_deg),
         )
+        trafo_matrix_vehicle_to_cam = np.array(
+            cam_rgb_transform.get_inverse_matrix()
+        )
         bp = blueprint_library.find("sensor.camera.semantic_segmentation")
         fov = cg.field_of_view_deg
         bp.set_attribute("image_size_x", str(width))
@@ -186,6 +243,9 @@ def main():
         )
         actor_list.append(camera_rgb)
 
+        K = get_intrinsic_matrix(fov, width, height)
+        min_jump, max_jump = 5, 10
+
         # Create a synchronous mode context.
         with CarlaSyncMode(world, camera_rgb, fps=30) as sync_mode:
             frame = 0
@@ -195,11 +255,8 @@ def main():
                 clock.tick()
 
                 # Advance the simulation and wait for the data.
-                snapshot, image_seg = sync_mode.tick(timeout=2.0)
-                image_seg.convert(carla.ColorConverter.CityScapesPalette)
-
-                # set label
-                waypoint_label = is_junction_label(spawn_waypoint)
+                snapshot, image_rgb = sync_mode.tick(timeout=2.0)
+                image_rgb.convert(carla.ColorConverter.CityScapesPalette)
 
                 # Choose the next spawn_waypoint and update the car location.
                 # ----- change lane with low probability
@@ -216,6 +273,14 @@ def main():
                             shifted = spawn_waypoint.get_left_lane()
                     if shifted is not None:
                         spawn_waypoint = shifted
+                # ----- jump forwards a random distance
+                # jump = np.random.uniform(min_jump, max_jump)
+                # next_waypoints = spawn_waypoint.next(jump)
+                # if not next_waypoints:
+                #     spawn_waypoint = get_random_spawn_point(m)
+                # else:
+                #     spawn_waypoint = random.choice(next_waypoints)
+                spawn_waypoint = get_random_spawn_point(m)
 
                 # ----- randomly change yaw and lateral position
                 spawn_transform = random_transform_disturbance(
@@ -226,7 +291,7 @@ def main():
                 # Draw the display.
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
-                draw_image(display, image_seg)
+                draw_image(display, image_rgb)
                 display.blit(
                     font.render(
                         "% 5d FPS (real)" % clock.get_fps(),
@@ -241,14 +306,66 @@ def main():
                     ),
                     (8, 28),
                 )
-                display.blit(
-                    font.render(
-                        "% 5d Waypoint Label" % waypoint_label, True, (255, 255, 255)
-                    ),
-                    (8, 46),
+
+                # draw lane boundaries as augmented reality
+                trafo_matrix_world_to_vehicle = np.array(
+                    vehicle.get_transform().get_inverse_matrix()
+                )
+                trafo_matrix_global_to_camera = (
+                    trafo_matrix_vehicle_to_cam @ trafo_matrix_world_to_vehicle
+                )
+                mat_swap_axes = np.array(
+                    [[0, 1, 0, 0], [0, 0, -1, 0], [1, 0, 0, 0], [0, 0, 0, 1]]
+                )
+                trafo_matrix_global_to_camera = (
+                    mat_swap_axes @ trafo_matrix_global_to_camera
                 )
 
-                spawn_waypoint = get_random_spawn_point(m)
+                center_list, left_boundary, right_boundary = create_lane_lines(
+                    m, vehicle
+                )
+                if center_list is None:
+                    spawn_waypoint = get_random_spawn_point(m)
+                    continue
+
+                projected_center = project_polyline(
+                    center_list, trafo_matrix_global_to_camera, K
+                ).astype(np.int32)
+                projected_left_boundary = project_polyline(
+                    left_boundary, trafo_matrix_global_to_camera, K
+                ).astype(np.int32)
+                projected_right_boundary = project_polyline(
+                    right_boundary, trafo_matrix_global_to_camera, K
+                ).astype(np.int32)
+                if (
+                    not check_inside_image(
+                        projected_right_boundary, width, height
+                    )
+                ) or (
+                    not check_inside_image(
+                        projected_right_boundary, width, height
+                    )
+                ):
+                    spawn_waypoint = get_random_spawn_point(m)
+                    continue
+                if len(projected_center) > 1:
+                    pygame.draw.lines(
+                        display, (255, 136, 0), False, projected_center, 4
+                    )
+                if len(projected_left_boundary) > 1:
+                    pygame.draw.lines(
+                        display, (255, 0, 0), False, projected_left_boundary, 4
+                    )
+                if len(projected_right_boundary) > 1:
+                    pygame.draw.lines(
+                        display,
+                        (0, 255, 0),
+                        False,
+                        projected_right_boundary,
+                        4,
+                    )
+
+                # in_lower_part_of_map = spawn_transform.location.y < 0
 
                 if store_files:
                     filename_base = simulation_identifier + "_frame_{}".format(
@@ -260,32 +377,65 @@ def main():
                     else:
                         x_bin_name = "val"
                         label_bin_name = "val_label"
-
+                    # if in_lower_part_of_map:
+                    #     if (
+                    #         np.random.rand() > 0.1
+                    #     ):  # do not need that many files from validation set
+                    #         continue
+                    #     filename_base += "_validation_set"
                     # image
                     image_out_path = os.path.join(
                         data_folder, x_bin_name, filename_base + ".png"
                     )
-                    save_img(image_seg, image_out_path)
-                    # label
+                    save_img(image_rgb, image_out_path)
+                    # label img
                     label_path = os.path.join(
-                        data_folder, label_bin_name, filename_base + "_label.txt"
+                        data_folder, label_bin_name, filename_base + "_label.png"
                     )
-                    save_label(
-                        np.array([waypoint_label]),
+                    save_label_img(
+                        projected_left_boundary,
+                        projected_right_boundary,
                         label_path,
                     )
+                    # # borders
+                    # border_array = np.hstack(
+                    #     (np.array(left_boundary), np.array(right_boundary))
+                    # )
+                    # border_path = os.path.join(
+                    #     data_folder, filename_base + "_boundary.txt"
+                    # )
+                    # np.savetxt(border_path, border_array)
+                    # # trafo
+                    # trafo_path = os.path.join(
+                    #     data_folder, filename_base + "_trafo.txt"
+                    # )
+                    # np.savetxt(trafo_path, trafo_matrix_global_to_camera)
+
+                curvature = get_curvature(center_list)
+                if curvature > 0.0005:
+                    min_jump, max_jump = 1, 2
+                else:
+                    min_jump, max_jump = 5, 10
 
                 pygame.display.flip()
                 frame += 1
 
     finally:
+
         print("destroying actors.")
         for actor in actor_list:
             actor.destroy()
+
         pygame.quit()
         print("done.")
+
+
 if __name__ == "__main__":
+
     try:
+
         main()
+
     except KeyboardInterrupt:
         print("\nCancelled by user. Bye!")
+
