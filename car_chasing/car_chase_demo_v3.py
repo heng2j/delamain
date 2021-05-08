@@ -870,6 +870,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         old_tx = deepcopy(tx)
         old_ty = deepcopy(ty)
 
+        
+
         # Leading waypoints 
         leading_waypoints = []
 
@@ -877,6 +879,12 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         
         # other actors
         other_actor_ids = []
+
+
+
+        # Trailing
+        trail_path = None        
+        real_dist = 0 
         
         
                         
@@ -893,6 +901,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         trail_c_d_dd = 0.0  # current latral acceleration [m/s]
         trail_s0 = 0.0  # current course position    
         
+                
+        i = 0
         
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
@@ -1079,7 +1089,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 wp = (new_vehicleToFollow_transform.location.x,  new_vehicleToFollow_transform.location.y,  new_vehicleToFollow_transform.location.z, 
                 new_vehicleToFollow_transform.rotation.pitch, new_vehicleToFollow_transform.rotation.yaw, new_vehicleToFollow_transform.rotation.roll )
 
-                leading_waypoints.append(wp)
 
                 vehicleToFollow.set_transform(new_vehicleToFollow_transform)
 
@@ -1092,6 +1101,10 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 c_d_dd = path.d_dd[1]
                 c_speed = path.s_d[1]
 
+
+
+                if i > 2:
+                    leading_waypoints.append(wp)
 
 
                 # if frame % LP_FREQUENCY_DIVISOR == 0:
@@ -1177,30 +1190,97 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # --------------------------------------------------------------
 
 
+
+
+
+                location2 = None
+
+                # ---- Car chasing activate -----
+                # Give time for leading car to cumulate waypoints 
+
+                #------- Trailing Frenet --------------------------------------
+                # Start frenet once every while
+                if (i > 50):
+#                     trailing_csp = look_ahead_local_planer(waypoints=leading_waypoints, current_idx=0, look_ahead=len(leading_waypoints))
+
+
+#                     speed = get_speed(vehicle)
+                    FRENET_FREQUENCY_DIVISOR = 2
+                    if (frame % FRENET_FREQUENCY_DIVISOR == 0) and (real_dist > 5):
+
+
+                        wx = []
+                        wy = []
+                        wz = []
+
+                        for p in leading_waypoints:
+                            wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
+                            wx.append(wp.location.x)
+                            wy.append(wp.location.y)
+                            wz.append(wp.location.z)
+
+
+                        tx, ty, tyaw, tc, trailing_csp = generate_target_course(wx, wy, wz)
+
+#                             tx, new_ty, tyaw, tc, trailing_csp = generate_target_course(wx, wy, wz)
+
+
+                        trail_path =  frenet_optimal_planning(trailing_csp, trail_s0, trail_c_speed, trail_c_d, trail_c_d_d, trail_c_d_dd, ob)
+
+                        if trail_path:
+
+                            trail_s0 = trail_path.s[1]
+                            trail_c_d = trail_path.d[1]
+                            trail_c_d_d = trail_path.d_d[1]
+                            trail_c_d_dd = trail_path.d_dd[1]
+                            trail_c_speed = trail_path.s_d[1]
+
+    #                     elif len(trail_path.x) < 2:
+
+    #                         trail_s0 = 0
+    #                     else :
+    #                         trail_s0 = 0
+
+
+                            new_vehicle_transform = carla.Transform()
+                            new_vehicle_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(trail_path.yaw[1]), roll=0.0) 
+
+                            new_vehicle_transform.location.x = trail_path.x[1]
+                            new_vehicle_transform.location.y = trail_path.y[1]
+                            new_vehicle_transform.location.z = trail_path.z[1]
+
+#                                 location2 = new_vehicle_transform
+                            vehicle.set_transform(new_vehicle_transform)
+
+
+
+
+
+
                 location1 = vehicle.get_transform()
                 location2 = vehicleToFollow.get_transform()
 
 
-                # Update vehicle position by detecting vehicle to follow position
-                newX, newY = carDetector.CreatePointInFrontOFCar(location1.location.x, location1.location.y,location1.rotation.yaw)
-                angle = carDetector.getAngle([location1.location.x, location1.location.y], [newX, newY],
-                                             [location2.location.x, location2.location.y])
+                # # Update vehicle position by detecting vehicle to follow position
+                # newX, newY = carDetector.CreatePointInFrontOFCar(location1.location.x, location1.location.y,location1.rotation.yaw)
+                # angle = carDetector.getAngle([location1.location.x, location1.location.y], [newX, newY],
+                #                              [location2.location.x, location2.location.y])
 
-                possibleAngle = 0
-                drivableIndexes = []
-                bbox = []
+                # possibleAngle = 0
+                # drivableIndexes = []
+                # bbox = []
 
                 
-                bbox, predicted_distance,predicted_angle = carDetector.getDistance(vehicleToFollow, camera_rgb, carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
+                # bbox, predicted_distance,predicted_angle = carDetector.getDistance(vehicleToFollow, camera_rgb, carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
 
-                # if frame % LP_FREQUENCY_DIVISOR == 0:
-                #     # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
-                #     predicted_angle, drivableIndexes = semantic.FindPossibleAngle(image_segmentation,bbox,predicted_angle) # This is still necessary need to optimize it 
+                # # if frame % LP_FREQUENCY_DIVISOR == 0:
+                # #     # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
+                # #     predicted_angle, drivableIndexes = semantic.FindPossibleAngle(image_segmentation,bbox,predicted_angle) # This is still necessary need to optimize it 
                     
-                steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
+                # steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
 
-                # # This is a new method
-                # send_control(vehicle, throttle, steer, 0)
+                # # # This is a new method
+                # # send_control(vehicle, throttle, steer, 0)
 
 
                 speed = np.linalg.norm(carla_vec_to_np_array(vehicle.get_velocity()))
@@ -1234,26 +1314,26 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 #     (8, 82))
 
 
-                # Draw bbox on following vehicle
-                if len(bbox) != 0:
-                    points = [(int(bbox[i, 0]), int(bbox[i, 1])) for i in range(8)]
-                    BB_COLOR = (248, 64, 24)
-                    # draw lines
-                    # base
-                    pygame.draw.line(display, BB_COLOR, points[0], points[1])
-                    pygame.draw.line(display, BB_COLOR, points[1], points[2])
-                    pygame.draw.line(display, BB_COLOR, points[2], points[3])
-                    pygame.draw.line(display, BB_COLOR, points[3], points[0])
-                    # top
-                    pygame.draw.line(display, BB_COLOR, points[4], points[5])
-                    pygame.draw.line(display, BB_COLOR, points[5], points[6])
-                    pygame.draw.line(display, BB_COLOR, points[6], points[7])
-                    pygame.draw.line(display, BB_COLOR, points[7], points[4])
-                    # base-top
-                    pygame.draw.line(display, BB_COLOR, points[0], points[4])
-                    pygame.draw.line(display, BB_COLOR, points[1], points[5])
-                    pygame.draw.line(display, BB_COLOR, points[2], points[6])
-                    pygame.draw.line(display, BB_COLOR, points[3], points[7])
+                # # Draw bbox on following vehicle
+                # if len(bbox) != 0:
+                #     points = [(int(bbox[i, 0]), int(bbox[i, 1])) for i in range(8)]
+                #     BB_COLOR = (248, 64, 24)
+                #     # draw lines
+                #     # base
+                #     pygame.draw.line(display, BB_COLOR, points[0], points[1])
+                #     pygame.draw.line(display, BB_COLOR, points[1], points[2])
+                #     pygame.draw.line(display, BB_COLOR, points[2], points[3])
+                #     pygame.draw.line(display, BB_COLOR, points[3], points[0])
+                #     # top
+                #     pygame.draw.line(display, BB_COLOR, points[4], points[5])
+                #     pygame.draw.line(display, BB_COLOR, points[5], points[6])
+                #     pygame.draw.line(display, BB_COLOR, points[6], points[7])
+                #     pygame.draw.line(display, BB_COLOR, points[7], points[4])
+                #     # base-top
+                #     pygame.draw.line(display, BB_COLOR, points[0], points[4])
+                #     pygame.draw.line(display, BB_COLOR, points[1], points[5])
+                #     pygame.draw.line(display, BB_COLOR, points[2], points[6])
+                #     pygame.draw.line(display, BB_COLOR, points[3], points[7])
 
                 # DrawDrivable(drivableIndexes, image_segmentation.width // 10, image_segmentation.height // 10, display)
 
