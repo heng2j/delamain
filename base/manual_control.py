@@ -222,9 +222,6 @@ class KeyboardControl(object):
                         # current_lights ^= carla.VehicleLightState.Interior
                         # Modification
                         world.gps_flag = True
-                        # world.gps_flag = not world.gps_flag
-                        # if world.gps_flag:
-                        #     world.gps_vis = True
                         world.hud.notification(
                             'GPS Navigation %s' % ('On' if world.gps_flag else 'Off'))
                     elif event.key == K_z:
