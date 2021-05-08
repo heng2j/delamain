@@ -25,6 +25,7 @@ import numpy as np
 import pygame
 import math
 import pickle
+import copy
 from util.carla_util import carla_vec_to_np_array, carla_img_to_array, CarlaSyncMode, find_weather_presets, get_font, should_quit #draw_image
 from util.geometry_util import dist_point_linestring
 
@@ -132,6 +133,267 @@ class Evaluation():
         self.n_of_collisions += 1
 
 
+
+
+# Frenet imports
+
+from cubic_spline_planner import *
+from quintic_polynomials_planner import QuinticPolynomial
+
+def generate_target_course(x, y, z):
+    csp = Spline3D(x, y, z)
+    s = np.arange(0, csp.s[-1], 0.1)
+
+    rx, ry, rz, ryaw, rk = [], [], [], [], []
+    for i_s in s:
+        ix, iy, iz = csp.calc_position(i_s)
+        rx.append(ix)
+        ry.append(iy)
+        rz.append(iz)
+        ryaw.append(csp.calc_yaw(i_s))
+        rk.append(csp.calc_curvature(i_s))
+
+    return rx, ry, ryaw, rk, csp
+
+
+class QuarticPolynomial:
+
+    def __init__(self, xs, vxs, axs, vxe, axe, time):
+        # calc coefficient of quartic polynomial
+
+        self.a0 = xs
+        self.a1 = vxs
+        self.a2 = axs / 2.0
+
+        A = np.array([[3 * time ** 2, 4 * time ** 3],
+                      [6 * time, 12 * time ** 2]])
+        b = np.array([vxe - self.a1 - 2 * self.a2 * time,
+                      axe - 2 * self.a2])
+        x = np.linalg.solve(A, b)
+
+        self.a3 = x[0]
+        self.a4 = x[1]
+
+    def calc_point(self, t):
+        xt = self.a0 + self.a1 * t + self.a2 * t ** 2 + \
+             self.a3 * t ** 3 + self.a4 * t ** 4
+
+        return xt
+
+    def calc_first_derivative(self, t):
+        xt = self.a1 + 2 * self.a2 * t + \
+             3 * self.a3 * t ** 2 + 4 * self.a4 * t ** 3
+
+        return xt
+
+    def calc_second_derivative(self, t):
+        xt = 2 * self.a2 + 6 * self.a3 * t + 12 * self.a4 * t ** 2
+
+        return xt
+
+    def calc_third_derivative(self, t):
+        xt = 6 * self.a3 + 24 * self.a4 * t
+
+        return xt
+
+def calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0):
+    frenet_paths = []
+
+    # generate path to each offset goal
+    for di in np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W):
+
+        # Lateral motion planning
+        for Ti in np.arange(MIN_T, MAX_T, DT):
+            fp = FrenetPath()
+
+            lat_qp = QuinticPolynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
+
+            fp.t = [t for t in np.arange(0.0, Ti, DT)]
+            fp.d = [lat_qp.calc_point(t) for t in fp.t]
+            fp.d_d = [lat_qp.calc_first_derivative(t) for t in fp.t]
+            fp.d_dd = [lat_qp.calc_second_derivative(t) for t in fp.t]
+            fp.d_ddd = [lat_qp.calc_third_derivative(t) for t in fp.t]
+
+            # Longitudinal motion planning (Velocity keeping)
+            for tv in np.arange(TARGET_SPEED - D_T_S * N_S_SAMPLE,
+                                TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S):
+                tfp = copy.deepcopy(fp)
+                lon_qp = QuarticPolynomial(s0, c_speed, 0.0, tv, 0.0, Ti)
+
+                tfp.s = [lon_qp.calc_point(t) for t in fp.t]
+                tfp.s_d = [lon_qp.calc_first_derivative(t) for t in fp.t]
+                tfp.s_dd = [lon_qp.calc_second_derivative(t) for t in fp.t]
+                tfp.s_ddd = [lon_qp.calc_third_derivative(t) for t in fp.t]
+
+                Jp = sum(np.power(tfp.d_ddd, 2))  # square of jerk
+                Js = sum(np.power(tfp.s_ddd, 2))  # square of jerk
+
+                # square of diff from target speed
+                ds = (TARGET_SPEED - tfp.s_d[-1]) ** 2
+
+                tfp.cd = K_J * Jp + K_T * Ti + K_D * tfp.d[-1] ** 2
+                tfp.cv = K_J * Js + K_T * Ti + K_D * ds
+                tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv
+
+                frenet_paths.append(tfp)
+
+    return frenet_paths
+
+
+def calc_global_paths(fplist, csp):
+    print("len(fplist): ", len(fplist))
+    for fp in fplist:
+
+        # calc global positions
+        for i in range(len(fp.s)):
+            ix, iy, iz = csp.calc_position(fp.s[i])
+            if ix is None:
+                break
+            i_yaw = csp.calc_yaw(fp.s[i])
+            di = fp.d[i]
+            fx = ix + di * math.cos(i_yaw + math.pi / 2.0)
+            fy = iy + di * math.sin(i_yaw + math.pi / 2.0)
+            fz = iz
+            fp.x.append(fx)
+            fp.y.append(fy)
+            fp.z.append(fz)
+            
+
+        # calc yaw and ds
+        for i in range(len(fp.x) - 1):
+            dx = fp.x[i + 1] - fp.x[i]
+            dy = fp.y[i + 1] - fp.y[i]
+            fp.yaw.append(math.atan2(dy, dx))
+            fp.ds.append(math.hypot(dx, dy))
+
+#         print("fp.x: ", fp.x)
+#         print("fp.yaw: ", fp.yaw)
+        fp.yaw.append(fp.yaw[-1])
+        fp.ds.append(fp.ds[-1])
+
+        # calc curvature
+        for i in range(len(fp.yaw) - 1):
+            fp.c.append((fp.yaw[i + 1] - fp.yaw[i]) / fp.ds[i])
+
+    return fplist
+
+
+
+def check_paths(fplist, ob):
+    ok_ind = []
+    for i, _ in enumerate(fplist):
+        if any([v > MAX_SPEED for v in fplist[i].s_d]):  # Max speed check
+            continue
+        elif any([abs(a) > MAX_ACCEL for a in
+                  fplist[i].s_dd]):  # Max accel check
+            continue
+        elif any([abs(c) > MAX_CURVATURE for c in
+                  fplist[i].c]):  # Max curvature check
+            continue
+        elif not check_collision(fplist[i], ob):
+            continue
+
+        ok_ind.append(i)
+
+    return [fplist[i] for i in ok_ind]
+
+def check_collision(fp, ob):
+    for i in range(len(ob[:, 0])):
+        d = [((ix - ob[i, 0]) ** 2 + (iy - ob[i, 1]) ** 2)
+             for (ix, iy) in zip(fp.x, fp.y)]
+
+        collision = any([di <= ROBOT_RADIUS ** 2 for di in d])
+
+        if collision:
+            return False
+
+    return True
+
+
+def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
+    fplist = calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0)
+    fplist = calc_global_paths(fplist, csp)
+    fplist = check_paths(fplist, ob)
+
+    # find minimum cost path
+    min_cost = float("inf")
+    best_path = None
+    for fp in fplist:
+        if min_cost >= fp.cf:
+            min_cost = fp.cf
+            best_path = fp
+
+    return best_path
+
+
+def frenet_to_inertial(s, d, csp):
+    """
+    transform a point from frenet frame to inertial frame
+    input: frenet s and d variable and the instance of global cubic spline class
+    output: x and y in global frame
+    """
+    ix, iy, iz = csp.calc_position(s)
+    iyaw = csp.calc_yaw(s)
+    x = ix + d * math.cos(iyaw + math.pi / 2.0)
+    y = iy + d * math.sin(iyaw + math.pi / 2.0)
+
+    return x, y, iz, iyaw
+
+
+class FrenetPath:
+
+    def __init__(self):
+        self.t = []
+        self.d = []
+        self.d_d = []
+        self.d_dd = []
+        self.d_ddd = []
+        self.s = []
+        self.s_d = []
+        self.s_dd = []
+        self.s_ddd = []
+        self.cd = 0.0
+        self.cv = 0.0
+        self.cf = 0.0
+
+        self.x = []
+        self.y = []
+        self.z = []
+        self.yaw = []
+        self.ds = []
+        self.c = []
+
+        self.v = []  # speed
+
+
+
+SIM_LOOP = 500
+
+# Parameter
+MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
+MAX_ACCEL = 2.0  # maximum acceleration [m/ss]
+MAX_CURVATURE = 0.8  # maximum curvature [1/m]
+MAX_ROAD_WIDTH = 10 #7  # maximum road width [m]
+D_ROAD_W = 1.0 # 1.0  # road width sampling length [m]
+DT = 0.2 #0.2 # time tick [s]
+MAX_T = 6.0  # max prediction time [m]
+MIN_T = 3.0  # min prediction time [m]
+TARGET_SPEED = 30.0 / 3.6  # target speed [m/s]
+D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
+N_S_SAMPLE = 1  # sampling number of target speed
+ROBOT_RADIUS = 2.2  # robot radius [m]
+
+# cost weights
+K_J = 0.1
+K_T = 0.1
+K_D = 1.0
+K_LAT = 1.0
+K_LON = 1.0
+
+
+show_animation = True
+
+
 def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, driveName='',record=False, followMode=False,
          resultsName='results',P=None,I=None,D=None,nOfFramesToSkip=0):
     # Imports
@@ -222,11 +484,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
             vehicle.set_transform(start_pose)
 
         # New Sensors
-        collision_sensor = world.spawn_actor(blueprint_library.find('sensor.other.collision'),
-                                                carla.Transform(), attach_to=vehicle)
-        collision_sensor.listen(lambda event: evaluation.CollisionHandler(event))
-        actor_list.append(collision_sensor)
-
         
         # front cam for object detection
         camera_rgb_blueprint = world.get_blueprint_library().find('sensor.camera.rgb')
@@ -246,21 +503,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
             attach_to=vehicle)
         actor_list.append(camera_segmentation)
         sensors.append(camera_segmentation)
-
-        # cg = CameraGeometry()
-        # ld = LaneDetector(model_path=Path("best_model.pth").absolute())
-        # #windshield cam
-        # cam_windshield_transform = carla.Transform(carla.Location(x=0.5, z=cg.height), carla.Rotation(pitch=-1*cg.pitch_deg))
-        # bp = blueprint_library.find('sensor.camera.rgb')
-        # bp.set_attribute('image_size_x', str(cg.image_width))
-        # bp.set_attribute('image_size_y', str(cg.image_height))
-        # bp.set_attribute('fov', str(cg.field_of_view_deg))
-        # camera_windshield = world.spawn_actor(
-        #     bp,
-        #     cam_windshield_transform,
-        #     attach_to=vehicle)
-        # actor_list.append(camera_windshield)
-        # sensors.append(camera_windshield)
 
 
         
@@ -303,6 +545,82 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         times = 8
         LP_FREQUENCY_DIVISOR = 4
 
+        # ==============================================================================
+        # -- Frenet related stuffs ---------------------------------------
+        # ==============================================================================
+
+
+        # -----------------Set Obstical Positions  -----------------------
+
+        # TMP obstacle lists
+        ob = np.array([
+                       [233.980630, 60.523910],
+                       [233.980630, 80.523910],
+                       [233.980630, 100.523910],
+                       [233.786942, 110.530586],
+                       ])
+        
+
+        # -----------------Set way points  -----------------------
+
+        def look_ahead_local_planer(waypoints: List, current_idx: int=0, look_ahead: int=20 ):
+            
+            wx = []
+            wy = []
+            wz = []
+
+            for p in waypoints[current_idx: (current_idx + look_ahead)]:
+                wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
+                wx.append(wp.location.x)
+                wy.append(wp.location.y)
+                wz.append(wp.location.z)
+
+#             print("wx: ", wx)
+            tx, ty, tyaw, tc, csp = generate_target_course(wx, wy, wz)
+            
+            return csp
+        
+
+        wx = []
+        wy = []
+        wz = []
+
+        for p in evaluation.history:
+            wp = carla.Transform(carla.Location(p[0] ,p[1],p[2]),carla.Rotation(p[3],p[4],p[5]))
+            wx.append(wp.location.x)
+            wy.append(wp.location.y)
+            wz.append(wp.location.z)
+
+
+        tx, ty, tyaw, tc, csp = generate_target_course(wx, wy, wz)
+        
+        old_tx = deepcopy(tx)
+        old_ty = deepcopy(ty)
+
+        # Leading waypoints 
+        leading_waypoints = []
+
+
+        
+        # other actors
+        other_actor_ids = []
+        
+        
+                        
+        # initial state
+        c_speed = 10.0 / 3.6  # current speed [m/s]
+        c_d = 2.0  # current lateral position [m]
+        c_d_d = 0.0  # current lateral speed [m/s]
+        c_d_dd = 0.0  # current latral acceleration [m/s]
+        s0 = 0.0  # current course position    
+        
+        trail_c_speed = 10.0 / 3.6  # current speed [m/s]
+        trail_c_d = 2.0  # current lateral position [m]
+        trail_c_d_d = 0.0  # current lateral speed [m/s]
+        trail_c_d_dd = 0.0  # current latral acceleration [m/s]
+        trail_s0 = 0.0  # current course position    
+        
+        
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
             while True:
@@ -315,15 +633,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # tick_response = sync_mode.tick(timeout=2.0)
 
 
-                # Display BirdView
-                # Input for your model - call it every simulation step
-                # returned result is np.ndarray with ones and zeros of shape (8, height, width)
-                
-                birdview = birdview_producer.produce(agent_vehicle=vehicle)
-                bgr = cv2.cvtColor(BirdViewProducer.as_rgb(birdview), cv2.COLOR_BGR2RGB)
-                # NOTE imshow requires BGR color model
-                cv2.imshow("BirdView RGB", bgr)
-                cv2.waitKey(1)
+
 
 
                 # snapshot, image_rgb, image_segmentation = tick_response
@@ -373,77 +683,125 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                     vehicleToFollow.set_simulate_physics(True)
                     # vehicleToFollow.set_autopilot(False)
 
-                if followDrivenPath:
-                    if counter >= len(evaluation.history):
-                        break
-                    tmp = evaluation.history[counter]
-                    currentPos = carla.Transform(carla.Location(tmp[0] ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
-                    vehicleToFollow.set_transform(currentPos)
-                    counter += 1
+                # if followDrivenPath:
+                #     if counter >= len(evaluation.history):
+                #         break
+                #     tmp = evaluation.history[counter]
+                #     currentPos = carla.Transform(carla.Location(tmp[0] ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+                #     vehicleToFollow.set_transform(currentPos)
+                #     counter += 1
 
+
+                # ------------------- Set up obsticle vehicle for testing  --------------------------------
 
                 # Set up obsticle vehicle for testing 
-                location1 = vehicle.get_transform()
-                location2 = vehicleToFollow.get_transform()
+  
+                if not obsticle_vehicleSpawned and followDrivenPath:
+                    obsticle_vehicleSpawned = True
+            
+                    for obsticle_p in ob:
 
-                # if not obsticle_vehicleSpawned and followDrivenPath:
-                #     obsticle_vehicleSpawned = True
-                #     # Adding new obsticle vehicle 
+                        start_pose3 = random.choice(m.get_spawn_points())
 
-                #     start_pose3 = random.choice(m.get_spawn_points())
+                        obsticle_vehicle = world.spawn_actor(
+                        random.choice(blueprint_library.filter('jeep')),
+                        start_pose3)
 
-                #     obsticle_vehicle = world.spawn_actor(
-                #         random.choice(blueprint_library.filter('jeep')),
-                #         start_pose3)
+                        start_pose3 = carla.Transform()
+                        start_pose3.rotation = start_pose2.rotation
+                        start_pose3.location.x = obsticle_p[0] 
+                        start_pose3.location.y =  obsticle_p[1]
+                        start_pose3.location.z =  start_pose2.location.z
 
-                #     start_pose3 = carla.Transform()
-                #     start_pose3.rotation = start_pose2.rotation
-                #     start_pose3.location.x = start_pose2.location.x 
-                #     start_pose3.location.y =  start_pose2.location.y + 50 
-                #     start_pose3.location.z =  start_pose2.location.z
+                        obsticle_vehicle.set_transform(start_pose3)
+                        # obsticle_vehicle.set_autopilot(True)
 
-                #     obsticle_vehicle.set_transform(start_pose3)
+        
+                        actor_list.append(obsticle_vehicle)
+                        obsticle_vehicle.set_simulate_physics(True)
+                
+                
+                        other_actor_ids.append(obsticle_vehicle.id)
+                    
+                        
+                #---- Leading Frenet -----------------------------
 
 
-                #     actor_list.append(obsticle_vehicle)
-                #     obsticle_vehicle.set_simulate_physics(True)
+                path = frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob)
+
+                f_idx = 1
+                ob = np.array([ [actor.get_transform().location.x,actor.get_transform().location.y] for actor in actor_list if actor.id in other_actor_ids ])
+
+                wps_to_go =len(path.x)
+
+
+                new_vehicleToFollow_transform = carla.Transform()
+                new_vehicleToFollow_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(path.yaw[1]), roll=0.0) 
+    
+                new_vehicleToFollow_transform.location.x = path.x[1]
+                new_vehicleToFollow_transform.location.y = path.y[1]
+                new_vehicleToFollow_transform.location.z = path.z[1]
 
 
 
-                # # Parked car(s) (X(m), Y(m), Z(m), Yaw(deg), RADX(m), RADY(m), RADZ(m))
-                # parkedcar_data = None
-                # parkedcar_box_pts = []      # [x,y]
-                # with open(C4_PARKED_CAR_FILE, 'r') as parkedcar_file:
-                #     next(parkedcar_file)  # skip header
-                #     parkedcar_reader = csv.reader(parkedcar_file, 
-                #                                 delimiter=',', 
-                #                                 quoting=csv.QUOTE_NONNUMERIC)
-                #     parkedcar_data = list(parkedcar_reader)
-                #     # convert to rad
-                #     for i in range(len(parkedcar_data)):
-                #         parkedcar_data[i][3] = parkedcar_data[i][3] * np.pi / 180.0 
+                wp = (new_vehicleToFollow_transform.location.x,  new_vehicleToFollow_transform.location.y,  new_vehicleToFollow_transform.location.z, 
+                new_vehicleToFollow_transform.rotation.pitch, new_vehicleToFollow_transform.rotation.yaw, new_vehicleToFollow_transform.rotation.roll )
 
-                # # obtain parked car(s) box points for LP
-                # for i in range(len(parkedcar_data)):
-                #     x = parkedcar_data[i][0]
-                #     y = parkedcar_data[i][1]
-                #     z = parkedcar_data[i][2]
-                #     yaw = parkedcar_data[i][3]
-                #     xrad = parkedcar_data[i][4]
-                #     yrad = parkedcar_data[i][5]
-                #     zrad = parkedcar_data[i][6]
-                #     cpos = np.array([
-                #             [-xrad, -xrad, -xrad, 0,    xrad, xrad, xrad,  0    ],
-                #             [-yrad, 0,     yrad,  yrad, yrad, 0,    -yrad, -yrad]])
-                #     rotyaw = np.array([
-                #             [np.cos(yaw), np.sin(yaw)],
-                #             [-np.sin(yaw), np.cos(yaw)]])
-                #     cpos_shift = np.array([
-                #             [x, x, x, x, x, x, x, x],
-                #             [y, y, y, y, y, y, y, y]])
-                #     cpos = np.add(np.matmul(rotyaw, cpos), cpos_shift)
-                #     for j in range(cpos.shape[1]):
-                #         parkedcar_box_pts.append([cpos[0,j], cpos[1,j]])
+
+                leading_waypoints.append(wp)
+
+
+                vehicleToFollow.set_transform(new_vehicleToFollow_transform)
+
+                
+
+
+                # wps_to_go = len(path.x)
+
+
+                # # follows path until end of WPs 
+                # loop_counter = 0
+                # while f_idx < wps_to_go:
+
+                #     loop_counter += 1
+
+                #     vehicleToFollow_location = [vehicleToFollow.get_location().x, vehicleToFollow.get_location().y, math.radians(vehicleToFollow.get_transform().rotation.yaw)]
+                #     f_idx = closest_wp_idx(vehicleToFollow_location, path, f_idx)
+
+                #     # cmdSpeed = math.sqrt((path.s_d[f_idx]) ** 2 + (path.d_d[f_idx]) ** 2)
+                #     # cmdWP = [path.x[f_idx], path.y[f_idx]]
+                #     # cmdWP2 = [path.x[f_idx + 1], path.y[f_idx + 1]]
+
+                    
+
+
+                #     # Set new way points
+                #     new_vehicleToFollow_transform = carla.Transform()
+                #     new_vehicleToFollow_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(path.yaw[f_idx]), roll=0.0) 
+        
+                #     new_vehicleToFollow_transform.location.x = path.x[f_idx]
+                #     new_vehicleToFollow_transform.location.y = path.y[f_idx]
+                #     new_vehicleToFollow_transform.location.z = path.z[f_idx]
+
+
+                #     wp = (new_vehicleToFollow_transform.location.x,  new_vehicleToFollow_transform.location.y,  new_vehicleToFollow_transform.location.z, 
+                #     new_vehicleToFollow_transform.rotation.pitch, new_vehicleToFollow_transform.rotation.yaw, new_vehicleToFollow_transform.rotation.roll )
+
+
+
+
+                #     leading_waypoints.append(wp)
+
+
+                #     vehicleToFollow.set_transform(new_vehicleToFollow_transform)
+
+
+                s0 = path.s[1]
+                c_d = path.d[1]
+                c_d_d = path.d_d[1]
+                c_d_dd = path.d_dd[1]
+                c_speed = path.s_d[1]
+
 
 
                 # if frame % LP_FREQUENCY_DIVISOR == 0:
@@ -529,7 +887,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # --------------------------------------------------------------
 
 
-
+                location1 = vehicle.get_transform()
+                location2 = vehicleToFollow.get_transform()
 
 
                 # Update vehicle position by detecting vehicle to follow position
@@ -544,14 +903,14 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 
                 bbox, predicted_distance,predicted_angle = carDetector.getDistance(vehicleToFollow, camera_rgb, carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
 
-                if frame % LP_FREQUENCY_DIVISOR == 0:
-                    # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
-                    predicted_angle, drivableIndexes = semantic.FindPossibleAngle(image_segmentation,bbox,predicted_angle) # This is still necessary need to optimize it 
+                # if frame % LP_FREQUENCY_DIVISOR == 0:
+                #     # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
+                #     predicted_angle, drivableIndexes = semantic.FindPossibleAngle(image_segmentation,bbox,predicted_angle) # This is still necessary need to optimize it 
                     
                 steer, throttle = drivingControlAdvanced.PredictSteerAndThrottle(predicted_distance,predicted_angle,None)
 
-                # This is a new method
-                send_control(vehicle, throttle, steer, 0)
+                # # This is a new method
+                # send_control(vehicle, throttle, steer, 0)
 
 
                 speed = np.linalg.norm(carla_vec_to_np_array(vehicle.get_velocity()))
@@ -609,6 +968,16 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 # DrawDrivable(drivableIndexes, image_segmentation.width // 10, image_segmentation.height // 10, display)
 
 
+                # Display BirdView
+                # Input for your model - call it every simulation step
+                # returned result is np.ndarray with ones and zeros of shape (8, height, width)
+                
+                birdview = birdview_producer.produce(agent_vehicle=vehicleToFollow)
+                bgr = cv2.cvtColor(BirdViewProducer.as_rgb(birdview), cv2.COLOR_BGR2RGB)
+                # NOTE imshow requires BGR color model
+                cv2.imshow("BirdView RGB", bgr)
+                cv2.waitKey(1)
+
 
                 pygame.display.flip()
 
@@ -642,7 +1011,7 @@ if __name__ == '__main__':
         drivesFileNames = os.listdir(drivesDir)
         drivesFileNames.sort()
 
-        drivesFileNames = ['ride10.p']  #  ['ride5.p']   ['ride8.p']  ['ride10.p']  for testing advance angle turns # turnel ['ride15.p']  
+        drivesFileNames = ['ride5.p']  #  ['ride5.p']   ['ride8.p']  ['ride10.p']  for testing advance angle turns # turnel ['ride15.p']  
 
         for fileName in drivesFileNames:
             main(optimalDistance=optimalDistance,followDrivenPath=followDrivenPath,chaseMode=chaseMode, evaluateChasingCar=evaluateChasingCar,driveName=os.path.join(drivesDir,fileName),record=record,followMode=followMode)
