@@ -26,6 +26,7 @@ import pygame
 import math
 import pickle
 import copy
+from collections import deque
 from util.carla_util import carla_vec_to_np_array, carla_img_to_array, CarlaSyncMode, find_weather_presets, get_font, should_quit #draw_image
 from util.geometry_util import dist_point_linestring
 
@@ -139,6 +140,18 @@ class Evaluation():
 
 from cubic_spline_planner import *
 from quintic_polynomials_planner import QuinticPolynomial
+
+
+def get_speed(vehicle):
+    """
+    Compute speed of a vehicle in Kmh
+    :param vehicle: the vehicle for which speed is calculated
+    :return: speed as a float in Kmh
+    """
+    vel = vehicle.get_velocity()
+    # return 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # 3.6 * meter per seconds = kmh
+    return math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)        # meter per seconds
+
 
 def generate_target_course(x, y, z):
     csp = Spline3D(x, y, z)
@@ -340,6 +353,36 @@ def frenet_to_inertial(s, d, csp):
     return x, y, iz, iyaw
 
 
+def euclidean_distance(v1, v2):
+    return math.sqrt(sum([(a - b) ** 2 for a, b in zip(v1, v2)]))
+
+
+def inertial_to_body_frame(ego_location, xi, yi, psi):
+    Xi = np.array([xi, yi])  # inertial frame
+    R_psi_T = np.array([[np.cos(psi), np.sin(psi)],  # Rotation matrix transpose
+                        [-np.sin(psi), np.cos(psi)]])
+    Xt = np.array([ego_location[0],  # Translation from inertial to body frame
+                   ego_location[1]])
+    Xb = np.matmul(R_psi_T, Xi - Xt)
+    return Xb
+
+
+def closest_wp_idx(ego_state, fpath, f_idx, w_size=10):
+    min_dist = 300  # in meters (Max 100km/h /3.6) * 2 sn
+    ego_location = [ego_state[0], ego_state[1]]
+    closest_wp_index = 0  # default WP
+    w_size = w_size if w_size <= len(fpath.t) - 2 - f_idx else len(fpath.t) - 2 - f_idx
+
+    print("w_size: ", w_size)
+    for i in range(w_size):
+        temp_wp = [fpath.x[f_idx + i], fpath.y[f_idx + i]]
+        temp_dist = euclidean_distance(ego_location, temp_wp)
+        if temp_dist <= min_dist \
+                and inertial_to_body_frame(ego_location, temp_wp[0], temp_wp[1], ego_state[2])[0] > 0.0:
+            closest_wp_index = i
+            min_dist = temp_dist
+    return f_idx + closest_wp_index
+
 class FrenetPath:
 
     def __init__(self):
@@ -365,6 +408,236 @@ class FrenetPath:
 
         self.v = []  # speed
 
+class PIDLongitudinalController:
+    """
+    PIDLongitudinalController implements longitudinal control using a PID.
+    """
+
+    def __init__(self, vehicle, K_P=10.0, K_D=0.0, K_I=0.0):
+        """
+        :param vehicle: actor to apply to local planner logic onto
+        :param K_P: Proportional term
+        :param K_D: Differential term
+        :param K_I: Integral term
+        :param dt: time differential in seconds
+        """
+        self._vehicle = vehicle
+        self._K_P = K_P
+        self._K_D = K_D
+        self._K_I = K_I
+        if float(0.1) > 0:
+            self.dt = float(0.1)
+        else:
+            self.dt = 0.05
+        self._e_buffer = deque(maxlen=10)
+
+    def reset(self):
+        self._e_buffer = deque(maxlen=10)
+
+    def run_step(self, target_speed):
+        """
+        Execute one step of longitudinal control to reach a given target speed.
+        :param target_speed: target speed in m/s
+        :return: throttle control in the range [0, 1]
+        """
+        current_speed = get_speed(self._vehicle)
+
+        return self._pid_control(target_speed, current_speed), current_speed
+
+    def _pid_control(self, target_speed, current_speed):
+        """
+        Estimate the throttle of the vehicle based on the PID equations
+        :param target_speed:  target speed in m/s
+        :param current_speed: current speed of the vehicle in Km/h
+        :return: throttle control in the range [0, 1]
+        """
+        _e = (target_speed - current_speed)
+        self._e_buffer.append(_e)
+
+        if len(self._e_buffer) >= 2:
+            _de = (self._e_buffer[-1] - self._e_buffer[-2]) / self.dt
+            _ie = sum(self._e_buffer) * self.dt
+        else:
+            _de = 0.0
+            _ie = 0.0
+
+        return np.clip((self._K_P * _e) + (self._K_D * _de / self.dt) + (self._K_I * _ie * self.dt), 0.0, 1.0)
+
+
+class PIDLateralController:
+    """
+    PIDLateralController implements lateral control using a PID.
+    """
+
+    def __init__(self, vehicle, K_P=0.2, K_D=0.0, K_I=0.0):
+        """
+        :param vehicle: actor to apply to local planner logic onto
+        :param K_P: Proportional term
+        :param K_D: Differential term
+        :param K_I: Integral term
+        :param dt: time differential in seconds
+        """
+        self._vehicle = vehicle
+        self._K_P = K_P
+        self._K_D = K_D
+        self._K_I = K_I
+        if float(0.1) > 0:
+            self.dt = float(0.1)
+        else:
+            self.dt = 0.05
+        self._e_buffer = deque(maxlen=10)
+
+        self.prev_prop = np.nan
+        self.prev_prev_prop = np.nan
+        self.curr_prop = np.nan
+        self.deriv_list = []
+        self.deriv_len = 5
+
+    def reset(self):
+        self._e_buffer = deque(maxlen=10)
+
+    def run_step(self, waypoint):
+        """
+        Execute one step of lateral control to steer the vehicle towards a certain waypoin.
+        :param waypoint: target waypoint
+        :return: steering control in the range [-1, 1] where:
+            -1 represent maximum steering to left
+            +1 maximum steering to right
+        """
+        return self._pid_control(waypoint, self._vehicle.get_transform())
+
+    def _pid_control(self, waypoint, vehicle_transform):
+        """
+        Estimate the steering angle of the vehicle based on the PID equations
+        :param waypoint: target waypoint [x, y]
+        :param vehicle_transform: current transform of the vehicle
+        :return: steering control in the range [-1, 1]
+        """
+        v_begin = vehicle_transform.location
+        v_end = v_begin + carla.Location(x=math.cos(math.radians(vehicle_transform.rotation.yaw)),
+                                         y=math.sin(math.radians(vehicle_transform.rotation.yaw)))
+
+        v_vec = np.array([v_end.x - v_begin.x, v_end.y - v_begin.y, 0.0])
+        w_vec = np.array([waypoint[0] -
+                          v_begin.x, waypoint[1] -
+                          v_begin.y, 0.0])
+        _dot = math.acos(np.clip(np.dot(w_vec, v_vec) /
+                                 (np.linalg.norm(w_vec) * np.linalg.norm(v_vec)), -1.0, 1.0))
+
+        _cross = np.cross(v_vec, w_vec)
+        if _cross[2] < 0:
+            _dot *= -1.0
+        self._e_buffer.append(_dot)
+        if len(self._e_buffer) >= 2:
+            _de = (self._e_buffer[-1] - self._e_buffer[-2]) / self.dt
+            _ie = sum(self._e_buffer) * self.dt
+        else:
+            _de = 0.0
+            _ie = 0.0
+
+        return np.clip((self._K_P * _dot) + (self._K_D * _de /
+                                             self.dt) + (self._K_I * _ie * self.dt), -1.0, 1.0)
+
+    def run_step_2_wp(self, waypoint1, waypoint2):
+        """
+        Execute one step of lateral control to steer the vehicle towards a certain waypoin.
+        :param waypoint: target waypoint
+        :return: steering control in the range [-1, 1] where:
+            -1 represent maximum steering to left
+            +1 maximum steering to right
+        """
+        return self._pid_control_2_wp(waypoint1, waypoint2, self._vehicle.get_transform())
+
+    def _pid_control_2_wp(self, waypoint1, waypoint2, vehicle_transform):
+        """
+        Estimate the steering angle of the vehicle based on the PID equations
+        :param waypoint: target waypoint [x, y]
+        :param vehicle_transform: current transform of the vehicle
+        :return: steering control in the range [-1, 1]
+        """
+        v_begin = vehicle_transform.location
+        v_end = v_begin + carla.Location(x=math.cos(math.radians(vehicle_transform.rotation.yaw)),
+                                         y=math.sin(math.radians(vehicle_transform.rotation.yaw)))
+
+        v_vec = np.array([v_end.x - v_begin.x, v_end.y - v_begin.y, 0.0])
+        w_vec = np.array([waypoint2[0] -
+                          waypoint1[0], waypoint2[1] -
+                          waypoint1[1], 0.0])
+        _dot = math.acos(np.clip(np.dot(w_vec, v_vec) /
+                                 (np.linalg.norm(w_vec) * np.linalg.norm(v_vec)), -1.0, 1.0))
+
+        _cross = np.cross(v_vec, w_vec)
+        if _cross[2] < 0:
+            _dot *= -1.0
+        self._e_buffer.append(_dot)
+        if len(self._e_buffer) >= 2:
+            _de = (self._e_buffer[-1] - self._e_buffer[-2]) / self.dt
+            _ie = sum(self._e_buffer) * self.dt
+        else:
+            _de = 0.0
+            _ie = 0.0
+
+        return np.clip((self._K_P * _dot) + (self._K_D * _de /
+                                             self.dt) + (self._K_I * _ie * self.dt), -1.0, 1.0)
+
+
+class VehiclePIDController:
+    """
+    VehiclePIDController is the combination of two PID controllers (lateral and longitudinal) to perform the
+    low level control a vehicle from client side
+    """
+
+    def __init__(self, vehicle, args_lateral=None, args_longitudinal=None):
+        """
+        :param vehicle: actor to apply to local planner logic onto
+        :param args_lateral: dictionary of arguments to set the lateral PID controller using the following semantics:
+                             K_P -- Proportional term
+                             K_D -- Differential term
+                             K_I -- Integral term
+        :param args_longitudinal: dictionary of arguments to set the longitudinal PID controller using the following
+        semantics:
+                             K_P -- Proportional term
+                             K_D -- Differential term
+                             K_I -- Integral term
+        """
+        if not args_lateral:
+            args_lateral = {'K_P': 0.3, 'K_D': 0.0, 'K_I': 0.0}
+        if not args_longitudinal:
+            args_longitudinal = {'K_P': 40.0, 'K_D': 0.1, 'K_I': 4}
+
+        self._vehicle = vehicle
+        self._lon_controller = PIDLongitudinalController(self._vehicle, **args_longitudinal)
+        self._lat_controller = PIDLateralController(self._vehicle, **args_lateral)
+
+    # def reset(self):
+    #     self._lon_controller.reset()
+    #     self._lat_controller.reset()
+    #     control = carla.VehicleControl()
+    #     control.steer = 0.0
+    #     control.throttle = 0.0
+    #     control.brake = 1.0
+    #     control.hand_brake = True
+    #     control.manual_gear_shift = False
+    #     self._vehicle.apply_control(control)
+
+    def run_step_2_wp(self, target_speed, waypoint1, waypoint2):
+        """
+        Execute one step of control invoking both lateral and longitudinal PID controllers to reach a target waypoint
+        at a given target_speed.
+        :param target_speed: desired vehicle speed
+        :param waypoint: target location encoded as a waypoint
+        :return: distance (in meters) to the waypoint
+        """
+        throttle, speed = self._lon_controller.run_step(target_speed)
+        steering = self._lat_controller.run_step_2_wp(waypoint1, waypoint2)
+        control = carla.VehicleControl()
+        control.steer = steering
+        control.throttle = throttle
+        control.brake = 0.0
+        control.hand_brake = False
+        control.manual_gear_shift = False
+
+        return control
 
 
 SIM_LOOP = 500
@@ -683,13 +956,13 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                     vehicleToFollow.set_simulate_physics(True)
                     # vehicleToFollow.set_autopilot(False)
 
-                # if followDrivenPath:
-                #     if counter >= len(evaluation.history):
-                #         break
-                #     tmp = evaluation.history[counter]
-                #     currentPos = carla.Transform(carla.Location(tmp[0] ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
-                #     vehicleToFollow.set_transform(currentPos)
-                #     counter += 1
+                if followDrivenPath:
+                    if counter >= len(evaluation.history):
+                        break
+                    tmp = evaluation.history[counter]
+                    currentPos = carla.Transform(carla.Location(tmp[0] + 5 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+                    vehicleToFollow.set_transform(currentPos)
+                    counter += 1
 
 
                 # ------------------- Set up obsticle vehicle for testing  --------------------------------
@@ -725,16 +998,76 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                     
                         
                 #---- Leading Frenet -----------------------------
-
+                # vehicleController = VehiclePIDController(vehicle, args_lateral={'K_P': 1.5, 'K_D': 0.0, 'K_I': 0.0})
 
                 path = frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob)
 
-                f_idx = 1
+                # f_idx = 1
                 ob = np.array([ [actor.get_transform().location.x,actor.get_transform().location.y] for actor in actor_list if actor.id in other_actor_ids ])
 
-                wps_to_go =len(path.x)
+                # wps_to_go = len(path.t) - 3 
+                # print("wps_to_go: ", wps_to_go)
 
 
+                # # follows path until end of WPs 
+                # loop_counter = 0
+                # while f_idx < wps_to_go:
+                    
+                #     pre_f_idx = copy.deepcopy(f_idx)
+
+                #     loop_counter += 1
+                #     print("f_idx before : ", f_idx)
+
+                #     vehicleToFollow_location = [vehicle.get_location().x, vehicle.get_location().y, math.radians(vehicle.get_transform().rotation.yaw)]
+                #     f_idx = closest_wp_idx(vehicleToFollow_location, path, f_idx)
+                #     print("f_idx after: ", f_idx)
+                #     if pre_f_idx == f_idx:
+                #         f_idx += 1
+                #     if f_idx > wps_to_go:
+                #         print("f_idx is greater than wps_to_go")
+                #         f_idx -=1
+         
+                #     cmdSpeed = math.sqrt((path.s_d[f_idx]) ** 2 + (path.d_d[f_idx]) ** 2)
+                #     cmdWP = [path.x[f_idx], path.y[f_idx]]
+                #     cmdWP2 = [path.x[f_idx + 1], path.y[f_idx + 1]]
+
+
+                #     # control = self.vehicleController.run_step(cmdSpeed, cmdWP)  # calculate control
+                #     control = vehicleController.run_step_2_wp(cmdSpeed, cmdWP, cmdWP2)  # calculate control
+                #     vehicle.apply_control(control)  # apply control
+                            
+                #     # # Set new way points
+                #     # new_vehicleToFollow_transform = carla.Transform()
+                #     # new_vehicleToFollow_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(path.yaw[f_idx]), roll=0.0) 
+        
+                #     # new_vehicleToFollow_transform.location.x = path.x[f_idx]
+                #     # new_vehicleToFollow_transform.location.y = path.y[f_idx]
+                #     # new_vehicleToFollow_transform.location.z = path.z[f_idx]
+
+
+                #     # wp = (new_vehicleToFollow_transform.location.x,  new_vehicleToFollow_transform.location.y,  new_vehicleToFollow_transform.location.z, 
+                #     # new_vehicleToFollow_transform.rotation.pitch, new_vehicleToFollow_transform.rotation.yaw, new_vehicleToFollow_transform.rotation.roll )
+
+                #     # leading_waypoints.append(wp)
+
+                #     # vehicleToFollow.set_transform(new_vehicleToFollow_transform)
+
+
+                # cmdSpeed = math.sqrt((path.s_d[1]) ** 2 + (path.d_d[1]) ** 2)
+                # cmdWP = [path.x[1], path.y[1]]
+                # cmdWP2 = [path.x[1 + 1], path.y[1 + 1]]
+
+
+                # # control = self.vehicleController.run_step(cmdSpeed, cmdWP)  # calculate control
+                # control = vehicleController.run_step_2_wp(cmdSpeed, cmdWP, cmdWP2)  # calculate control
+                # vehicle.apply_control(control)  # apply control
+
+
+
+
+                # --------------------------- Working leading frenet 
+
+                # Set new way points
                 new_vehicleToFollow_transform = carla.Transform()
                 new_vehicleToFollow_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(path.yaw[1]), roll=0.0) 
     
@@ -743,57 +1076,14 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 new_vehicleToFollow_transform.location.z = path.z[1]
 
 
-
                 wp = (new_vehicleToFollow_transform.location.x,  new_vehicleToFollow_transform.location.y,  new_vehicleToFollow_transform.location.z, 
                 new_vehicleToFollow_transform.rotation.pitch, new_vehicleToFollow_transform.rotation.yaw, new_vehicleToFollow_transform.rotation.roll )
 
-
                 leading_waypoints.append(wp)
-
 
                 vehicleToFollow.set_transform(new_vehicleToFollow_transform)
 
-                
 
-
-                # wps_to_go = len(path.x)
-
-
-                # # follows path until end of WPs 
-                # loop_counter = 0
-                # while f_idx < wps_to_go:
-
-                #     loop_counter += 1
-
-                #     vehicleToFollow_location = [vehicleToFollow.get_location().x, vehicleToFollow.get_location().y, math.radians(vehicleToFollow.get_transform().rotation.yaw)]
-                #     f_idx = closest_wp_idx(vehicleToFollow_location, path, f_idx)
-
-                #     # cmdSpeed = math.sqrt((path.s_d[f_idx]) ** 2 + (path.d_d[f_idx]) ** 2)
-                #     # cmdWP = [path.x[f_idx], path.y[f_idx]]
-                #     # cmdWP2 = [path.x[f_idx + 1], path.y[f_idx + 1]]
-
-                    
-
-
-                #     # Set new way points
-                #     new_vehicleToFollow_transform = carla.Transform()
-                #     new_vehicleToFollow_transform.rotation =  carla.Rotation(pitch=0.0, yaw=math.degrees(path.yaw[f_idx]), roll=0.0) 
-        
-                #     new_vehicleToFollow_transform.location.x = path.x[f_idx]
-                #     new_vehicleToFollow_transform.location.y = path.y[f_idx]
-                #     new_vehicleToFollow_transform.location.z = path.z[f_idx]
-
-
-                #     wp = (new_vehicleToFollow_transform.location.x,  new_vehicleToFollow_transform.location.y,  new_vehicleToFollow_transform.location.z, 
-                #     new_vehicleToFollow_transform.rotation.pitch, new_vehicleToFollow_transform.rotation.yaw, new_vehicleToFollow_transform.rotation.roll )
-
-
-
-
-                #     leading_waypoints.append(wp)
-
-
-                #     vehicleToFollow.set_transform(new_vehicleToFollow_transform)
 
 
                 s0 = path.s[1]
