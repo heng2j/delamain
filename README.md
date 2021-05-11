@@ -43,6 +43,12 @@ Team Members:
 
 Follow the below instructions in order to be able to run Interceptor 4.0 on your machine.
 
+1. Start Server Map: Open Carla.exe
+2. Start Client and connect to Server map: Run "python base_model3.py" in cli
+3. Press "i" to activate GPS from current location to destination.
+4. Press "p" to toggle autopilot
+5. Press "h" to toggle hotkey map
+
 ### Prerequisites
 
 * CARLA
@@ -81,7 +87,7 @@ Heng ... - ...
 
 Nicolas Morant (DevGlitch) - [Personal Website](https://www.nicolasmorant.com/)
 
-Jack Tsu - ...
+Jack Tsu (codejacktsu) - [Github](https://github.com/codejacktsu)
 
 <br></br>
 Project Link: [https://github.com/heng2j/delamain](https://github.com/heng2j/delamain)
