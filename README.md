@@ -1,15 +1,3 @@
-# delamain
-
-Lane tracking: L4->L2
-Lane-assist curse control (for highway)
-- faster calc
-- new data
-- assumption: segmentation camera
-
-Stop signs/Traffic warning
-
-Intersection:???
--
 # Interceptor 4.0 - Team Delamain
 
 Project for DGMD E-17, Spring 2021, Harvard University
@@ -43,6 +31,7 @@ Team Members:
 
 Follow the below instructions in order to be able to run Interceptor 4.0 on your machine.
 
+0. Install Carla v9.10 and Unreal Engine
 1. Start Server Map: Open Carla.exe
 2. Start Client and connect to Server map: Run "python base_model3.py" in cli
 3. Press "i" to activate GPS from current location to destination.
