@@ -11,9 +11,6 @@ Team Members:
    * Nicolas Morant aka DevGlitch
    * Huayu (Jack) Tsu aka codejacktsu
 
-<br>
-
-<br>
 
 <!-- PROJECT LOGO -->
 <br />
