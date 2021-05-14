@@ -31,11 +31,7 @@ https://github.com/heng2j/delamain/Presentation_and_Report/Project_Report_Team_D
 
 <!-- PROJECT PRESENTATION-->
 ## Presentation
-<p align="center">
-  <a href="https://youtu.be/7PMrhMN3heU">
-    <img src="images/youtube.jpeg" alt="Logo" width="200" height="200">
-  </a>
-</p>
+https://youtu.be/7PMrhMN3heU
 
 
 <!-- DEMO OF THE PROJECT -->
