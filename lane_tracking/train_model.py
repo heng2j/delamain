@@ -7,14 +7,17 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+# from sklearn.model_selection import train_test_split
 
-DATA_DIR = 'data/data_lane_segmentation/'
+DATA_DIR = 'data/train_data/'
 
-x_train_dir = os.path.join(DATA_DIR, 'train')
-y_train_dir = os.path.join(DATA_DIR, 'train_label')
+x_train_dir = os.path.join(DATA_DIR, 'x')
+y_train_dir = os.path.join(DATA_DIR, 'label')
 
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 x_valid_dir = os.path.join(DATA_DIR, 'val')
 y_valid_dir = os.path.join(DATA_DIR, 'val_label')
+
 
 # helper function for data visualization
 def visualize(**images):
