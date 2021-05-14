@@ -17,24 +17,7 @@ Team Members:
     <img src="images/police_car_picture.png" alt="Logo" height="300">
   </a>
 </p>
-=======
-Project for DGMD E-17, Spring 2021, Harvard University
 
-Team Members:
-   * Heng aka heng2j
-   * Nicolas Morant aka D̷e̵v̷G̸l̶i̸t̷c̸h̶
-   * Jack Tsu aka codejacktsu
-
-<br>
-
-![Python version](https://img.shields.io/badge/python-v3.7-blue)
-
-...Add more badges...
-
-<br>
-
-<!-- PROJECT LOGO -->
-...Insert image here...
 
 <!-- DESCRIPTION OF THE PROJECT -->
 ## Description
@@ -43,6 +26,7 @@ that patrols neighborhoods and when needed chases vehicles.
 
 The challenges Interceptor 4.0 would face are as follows: lane detection and tracking, 
 object detection and avoidance, GPS navigation, self-parking, specific vehicle tracking, and car chasing.
+
 
 <!-- PROJECT REPORT-->
 ## Project Report
@@ -57,11 +41,6 @@ https://youtu.be/7PMrhMN3heU
 <!-- DEMO OF THE PROJECT -->
 ## Demos
 https://github.com/heng2j/delamain/demos
-=======
-https://github.com/heng2j/delamain/Demos
-=======
-<!-- DEMO OF THE PROJECT -->
-## Demo
 
 
 <!-- GETTING STARTED -->
@@ -72,27 +51,12 @@ Follow the below instructions in order to run Interceptor 4.0 on your machine.
 
 ### Prerequisites
 
-* CARLA 0.9.10<br>
+* CARLA v0.9.10<br>
   https://github.com/carla-simulator/carla <br>
   This project was developed using this specific version of CARLA.<br>
   We cannot guarantee that it would work with any higher version.
-
-=======
-Follow the below instructions in order to be able to run Interceptor 4.0 on your machine.
-
-0. Install Carla v9.10 and Unreal Engine
-1. Start Server Map: Open Carla.exe
-2. Start Client and connect to Server map: Run "python base_model3.py" in cli
-3. Press "i" to activate GPS from current location to destination.
-4. Press "p" to toggle autopilot
-5. Press "h" to toggle hotkey map
-
-### Prerequisites
-
-* CARLA
-
-* ...
-
+  
+  
 ### Installation
 
 1. Clone the repo
@@ -190,18 +154,6 @@ Run car chasing with dynamic Frenet short-term trajectory planning
 ```sh
    python car_chase_demo_v3.py
    ```
-=======
-
-2. ...
-
-
-### Options
-
-* ...
-
-### Running
-
-* ...
 
 
 <!-- LICENSE -->
@@ -220,15 +172,7 @@ Nicolas Morant - [Personal Website](https://www.nicolasmorant.com/)
 
 Huayu (Jack) Tsu - [Github](https://github.com/codejacktsu)
 
+
 <br>
-
-=======
-Heng ... - ...
-
-Nicolas Morant (DevGlitch) - [Personal Website](https://www.nicolasmorant.com/)
-
-Jack Tsu (codejacktsu) - [Github](https://github.com/codejacktsu)
-
-<br></br>
 
 Project Link: [https://github.com/heng2j/delamain](https://github.com/heng2j/delamain)
