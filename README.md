@@ -19,7 +19,7 @@ Team Members:
 <br />
 <p align="center">
   <a href="https://github.com/heng2j/delamain">
-    <img src="Demos/police_car_picture.png" alt="Logo" height="300">
+    <img src="images/police_car_picture.png" alt="Logo" height="300">
   </a>
 </p>
 
@@ -27,21 +27,29 @@ Team Members:
 ## Description
 
 
-<!-- DEMO OF THE PROJECT -->
-## Demo
+<!-- PROJECT REPORT-->
+## Project Report
+https://github.com/heng2j/delamain/Presentation_and_Report/Project_Report_Team_Delamain.pdf
 
+
+<!-- PROJECT PRESENTATION-->
+## Presentation
+<p align="center">
+  <a href="https://youtu.be/7PMrhMN3heU">
+    <img src="images/youtube.jpeg" alt="Logo" width="200" height="200">
+  </a>
+</p>
+
+
+<!-- DEMO OF THE PROJECT -->
+## Demos
+https://github.com/heng2j/delamain/Demos
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-Follow the below instructions in order to be able to run Interceptor 4.0 on your machine.
+Follow the below instructions in order to run Interceptor 4.0 on your machine.
 
-0. Install Carla v0.9.10 and Unreal Engine
-1. Start Server Map: Open Carla.exe
-2. Start Client and connect to Server map: Run "python base_model3.py" in cli
-3. Press "i" to activate GPS from current location to destination.
-4. Press "p" to toggle autopilot
-5. Press "h" to toggle hotkey map
 
 ### Prerequisites
 
@@ -64,20 +72,23 @@ We cannot guarantee that it would work with any higher version.
 
 ### Running
 
-1. First step is to lunch CARLAUE4. 
+1. Start Server Map: Open CARLAUE4.exe
 
 
 2. Load the map that you'd lile. By default CARLA loads map Town03
 
 
-3. Run any of the command below.
+3. Run any of the command below.<br>
    Please make sure you are in the correct directory.
-
-  
+   
 
 * Base Model 3
 
-Third iteration of our base model with full capabilities.
+Third iteration of our base model with full capabilities.<br>
+
+Press "i" to activate GPS from current location to destination.<br>
+Press "p" to toggle autopilot<br>
+Press "h" to toggle hotkey map
 ```sh
    python base_model3.py
    ```
