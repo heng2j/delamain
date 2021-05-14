@@ -2,7 +2,7 @@
 
 ![Python version](https://img.shields.io/badge/python-v3.7-blue)
 ![GitHub contributors](https://img.shields.io/github/contributors/heng2j/delamain)
-![GitHub](https://img.shields.io/github/license/heng2j/delamain)
+[![GitHub](https://img.shields.io/github/license/heng2j/delamain)](https://github.com/heng2j/delamain/LICENSE)
 
 Team Members:
    * Zhongheng (Heng) Li aka heng2j
