@@ -1,11 +1,7 @@
 # Interceptor 4.0 - Team Delamain
 
 ![Python version](https://img.shields.io/badge/python-v3.7-blue)
-[![GitHub license](https://img.shields.io/github/license/heng2j/delamain)](https://github.com/heng2j/delamain/master/LICENSE)
-
-
-Project for DGMD E-17, Harvard University, Spring 2021
-
+![GitHub](https://img.shields.io/github/license/heng2j/delamain)
 Team Members:
    * Zhongheng (Heng) Li aka heng2j
    * Nicolas Morant aka DevGlitch
@@ -36,7 +32,7 @@ https://youtu.be/7PMrhMN3heU
 
 <!-- DEMO OF THE PROJECT -->
 ## Demos
-https://github.com/heng2j/delamain/Demos
+https://github.com/heng2j/delamain/demos
 
 
 <!-- GETTING STARTED -->
@@ -47,11 +43,10 @@ Follow the below instructions in order to run Interceptor 4.0 on your machine.
 
 ### Prerequisites
 
-* CARLA 0.9.10 --> https://github.com/carla-simulator/carla
-
-This project was developed using this specific version of CARLA.
-<br>
-We cannot guarantee that it would work with any higher version.
+* CARLA 0.9.10<br>
+  https://github.com/carla-simulator/carla <br>
+  This project was developed using this specific version of CARLA.<br>
+  We cannot guarantee that it would work with any higher version.
 
 
 ### Installation
@@ -129,16 +124,6 @@ These files are in a format that enables you to use with Network X.
 This script is a visualizer in CARLA of the topology waypoints. Make sure to run the previous script in order for this one to work.
 ```sh
    python topology_waypoints_visualizer.py.py
-   ```
-
-* #### ... (... directory)
-```sh
-   python FILENAME.py
-   ```
-
-* #### ... (... directory)
-```sh
-   python FILENAME.py
    ```
 
 
