@@ -30,8 +30,7 @@ object detection and avoidance, GPS navigation, self-parking, specific vehicle t
 
 <!-- PROJECT REPORT-->
 ## Project Report
-https://github.com/heng2j/delamain/Project_Report/Project_Report_Team_Delamain.pdf
-
+https://github.com/heng2j/delamain/blob/master/Project_Report/Project_Report_Team_Delamain.pdf
 
 <!-- PROJECT PRESENTATION-->
 ## Presentation
@@ -40,7 +39,7 @@ https://youtu.be/7PMrhMN3heU
 
 <!-- DEMO OF THE PROJECT -->
 ## Demos
-https://github.com/heng2j/delamain/demos
+https://github.com/heng2j/delamain/tree/master/demos
 
 
 <!-- GETTING STARTED -->
