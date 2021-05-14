@@ -45,6 +45,7 @@ https://github.com/heng2j/delamain/Presentation_and_Report/Project_Report_Team_D
 ## Demos
 https://github.com/heng2j/delamain/Demos
 
+
 <!-- GETTING STARTED -->
 ## Getting Started
 
@@ -82,10 +83,9 @@ We cannot guarantee that it would work with any higher version.
    Please make sure you are in the correct directory.
    
 
-* Base Model 3
+* #### Base Model 3
 
 Third iteration of our base model with full capabilities.<br>
-
 Press "i" to activate GPS from current location to destination.<br>
 Press "p" to toggle autopilot<br>
 Press "h" to toggle hotkey map
@@ -93,7 +93,7 @@ Press "h" to toggle hotkey map
    python base_model3.py
    ```
 
-* GPS Navigation Base Model
+* #### GPS Navigation Base Model
 
 This file gives you a short demo of the navigation system. You can change the destination location.
 Please ensure the destination is for the load CARLA map.
@@ -101,21 +101,21 @@ Please ensure the destination is for the load CARLA map.
    python base_model_nav.py
    ```
 
-* Self-Parking Base Model
+* #### Self-Parking Base Model
 
 This file gives you a short demo of the self-parking feature. In this file you have the option to change from perpendicular to parallel parking.
 ```sh
    python base_model_park.py
    ```
 
-* Road Network Map (gps-nav directory)
+* #### Road Network Map (gps-nav directory)
 
 This script enables you to visualize the road network of any CARLA map.
 ```sh
    python road_network_map.py
    ```
 
-* Spectator Location (gps-nav directory)
+* #### Spectator Location (gps-nav directory)
 
 This script gave you the ability to get the exact location of the spectator view. 
 It gives you the location in CARLA Location (x, y, z).
@@ -123,7 +123,7 @@ It gives you the location in CARLA Location (x, y, z).
    python spectator_location.py
    ```
 
-* Topology Edge & Node (gps-nav directory)
+* #### Topology Edge & Node (gps-nav directory)
 
 This script enables you to store the topology data (edges and nodes) in two parquet files.
 These files are in a format that enables you to use with Network X.
@@ -131,19 +131,19 @@ These files are in a format that enables you to use with Network X.
    python topology_edge_and_node.py.py
    ```
 
-* Topology Waypoints Visualizer (gps-nav directory)
+* #### Topology Waypoints Visualizer (gps-nav directory)
 
 This script is a visualizer in CARLA of the topology waypoints. Make sure to run the previous script in order for this one to work.
 ```sh
    python topology_waypoints_visualizer.py.py
    ```
 
-* ... (... directory)
+* #### ... (... directory)
 ```sh
    python FILENAME.py
    ```
 
-* ... (... directory)
+* #### ... (... directory)
 ```sh
    python FILENAME.py
    ```
