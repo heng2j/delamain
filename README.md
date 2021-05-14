@@ -1,7 +1,9 @@
 # Interceptor 4.0 - Team Delamain
 
 ![Python version](https://img.shields.io/badge/python-v3.7-blue)
+![GitHub contributors](https://img.shields.io/github/contributors/heng2j/delamain)
 ![GitHub](https://img.shields.io/github/license/heng2j/delamain)
+
 Team Members:
    * Zhongheng (Heng) Li aka heng2j
    * Nicolas Morant aka DevGlitch
@@ -18,11 +20,15 @@ Team Members:
 
 <!-- DESCRIPTION OF THE PROJECT -->
 ## Description
+We wanted to build a level 4 autonomous law enforcement vehicle, Interceptor 4.0, 
+that patrols neighborhoods and when needed chases vehicles. 
 
+The challenges Interceptor 4.0 would face are as follows: lane detection and tracking, 
+object detection and avoidance, GPS navigation, self-parking, specific vehicle tracking, and car chasing.
 
 <!-- PROJECT REPORT-->
 ## Project Report
-https://github.com/heng2j/delamain/Presentation_and_Report/Project_Report_Team_Delamain.pdf
+https://github.com/heng2j/delamain/Project_Report/Project_Report_Team_Delamain.pdf
 
 
 <!-- PROJECT PRESENTATION-->
@@ -64,7 +70,7 @@ Follow the below instructions in order to run Interceptor 4.0 on your machine.
 1. Start Server Map: Open CARLAUE4.exe
 
 
-2. Load the map that you'd lile. By default CARLA loads map Town03
+2. Load the map that you'd like. By default CARLA loads map Town03
 
 
 3. Run any of the command below.<br>
@@ -96,14 +102,14 @@ This file gives you a short demo of the self-parking feature. In this file you h
    python base_model_park.py
    ```
 
-* #### Road Network Map (gps-nav directory)
+* #### Road Network Map
 
 This script enables you to visualize the road network of any CARLA map.
 ```sh
    python road_network_map.py
    ```
 
-* #### Spectator Location (gps-nav directory)
+* #### Spectator Location
 
 This script gave you the ability to get the exact location of the spectator view. 
 It gives you the location in CARLA Location (x, y, z).
@@ -111,7 +117,7 @@ It gives you the location in CARLA Location (x, y, z).
    python spectator_location.py
    ```
 
-* #### Topology Edge & Node (gps-nav directory)
+* #### Topology Edge & Node
 
 This script enables you to store the topology data (edges and nodes) in two parquet files.
 These files are in a format that enables you to use with Network X.
@@ -119,11 +125,32 @@ These files are in a format that enables you to use with Network X.
    python topology_edge_and_node.py.py
    ```
 
-* #### Topology Waypoints Visualizer (gps-nav directory)
+* #### Topology Waypoints Visualizer
 
 This script is a visualizer in CARLA of the topology waypoints. Make sure to run the previous script in order for this one to work.
 ```sh
-   python topology_waypoints_visualizer.py.py
+   python topology_waypoints_visualizer.py
+   ```
+
+* #### Base Model 3 Car Chasing
+
+Drive as leading car
+```sh
+   python base_model3_car_chasing.py
+   ```
+
+* #### Car Chase Demo v2
+
+Run as chasing car
+```sh
+   python car_chase_demo_v2.py
+   ```
+
+* #### Car Chase Demo v3
+
+Run car chasing with dynamic Frenet short-term trajectory planning
+```sh
+   python car_chase_demo_v3.py
    ```
 
 
