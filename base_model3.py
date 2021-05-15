@@ -17,6 +17,7 @@ except IndexError:
 
 import pygame
 import argparse
+import random
 
 from base.hud import HUD
 from base.world import World
@@ -181,28 +182,34 @@ def game_loop(args):
                     # ==================================================================
                     # Debug data
                     debug_view(image_rgb, image_seg, lane_mask,
-                               text=[not visual_nav, pid_type, round(wp_distance, 2), wp_counter, world.car_chase])
+                               text=[not visual_nav, pid_type, round(wp_distance, 2), wp_counter, world.car_chase, world.autopilot_flag])
 
-                # Car chasing
+                # # Car chasing
                 if world.car_chase:
                     # Spawn target vehicle
                     if not target_spawn:
                         target_bp = blueprint_library.find('vehicle.tesla.model3')
-                        target_transform = carla.Transform(carla.Location(x=ego_carla_loc.x+10,y=ego_carla_loc.y,z=1), carla.Rotation(yaw=180))
-                        target_vehicle = world.world.spawn_actor(target_bp, target_transform)
-                        target_vehicle.set_autopilot(True)
-                        target_spawn = True
+                        while target_spawn is False:
+                            try:
+                                target_transform = carla.Transform(carla.Location(x=ego_carla_loc.x + random.randint(5,30),y=ego_carla_loc.y + random.randint(-5,5),z=1), world.player.get_transform().rotation)
+                                target_vehicle = world.world.spawn_actor(target_bp, target_transform)
+                                target_spawn = True
+                            except:
+                                pass
+                            
+                        # For some reason autopilot is not working for targt vehicle
+                        # target_vehicle.set_autopilot(True)
+
                     trailing_steer, trailing_throttle, real_dist = chaseControl.behaviour_planner(
                         leading_vehicle=target_vehicle,
                         trailing_vehicle=world.player,
                         trailing_image_seg=image_seg,
                         trail_cam_rgb=cam_rgb,
                         frame=frame)
-                    send_control(target_vehicle, trailing_throttle, trailing_steer, 0)
+                    send_control( world.player, trailing_throttle, trailing_steer, 0)           
                     frame += 1
-                
                 # PID Controls
-                if world.autopilot_flag and not world.car_chase:
+                elif world.autopilot_flag and not world.car_chase:
                     if wp_cycle >= 1000.0 and not final_wp:
                         wp_cycle = 0.0
                         visual_nav = not world.world.get_map().get_waypoint(ego_carla_loc).next(2)[0].is_junction
