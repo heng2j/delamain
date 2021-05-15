@@ -442,30 +442,30 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
 
                 # Set up obsticle vehicle for testing 
-                location1 = vehicle.get_transform()
-                location2 = vehicleToFollow.get_transform()
+                # location1 = vehicle.get_transform()
+                # location2 = vehicleToFollow.get_transform()
 
-                if not obsticle_vehicleSpawned and followDrivenPath:
-                    obsticle_vehicleSpawned = True
-                    # Adding new obsticle vehicle 
+                # if not obsticle_vehicleSpawned and followDrivenPath:
+                #     obsticle_vehicleSpawned = True
+                #     # Adding new obsticle vehicle 
 
-                    start_pose3 = random.choice(m.get_spawn_points())
+                #     start_pose3 = random.choice(m.get_spawn_points())
 
-                    obsticle_vehicle = world.spawn_actor(
-                        random.choice(blueprint_library.filter('jeep')),
-                        start_pose3)
+                #     obsticle_vehicle = world.spawn_actor(
+                #         random.choice(blueprint_library.filter('jeep')),
+                #         start_pose3)
 
-                    start_pose3 = carla.Transform()
-                    start_pose3.rotation = start_pose2.rotation
-                    start_pose3.location.x = start_pose2.location.x 
-                    start_pose3.location.y =  start_pose2.location.y + 50 
-                    start_pose3.location.z =  start_pose2.location.z
+                #     start_pose3 = carla.Transform()
+                #     start_pose3.rotation = start_pose2.rotation
+                #     start_pose3.location.x = start_pose2.location.x 
+                #     start_pose3.location.y =  start_pose2.location.y + 50 
+                #     start_pose3.location.z =  start_pose2.location.z
 
-                    obsticle_vehicle.set_transform(start_pose3)
+                #     obsticle_vehicle.set_transform(start_pose3)
 
 
-                    actor_list.append(obsticle_vehicle)
-                    obsticle_vehicle.set_simulate_physics(True)
+                #     actor_list.append(obsticle_vehicle)
+                #     obsticle_vehicle.set_simulate_physics(True)
 
 
                 # if frame % LP_FREQUENCY_DIVISOR == 0:
@@ -486,6 +486,8 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                 # ------------------- Frenet  --------------------------------
                 path = frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob)
+
+                print("path length: ", len(path.x))
                 
                 
                 new_vehicleToFollow_transform = carla.Transform()
@@ -587,7 +589,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                 print("vehicleToFollow.get_transform()", vehicleToFollow.get_transform())
 
-                print("obsticle_vehicle.get_transform()", obsticle_vehicle.get_transform())
+                # print("obsticle_vehicle.get_transform()", obsticle_vehicle.get_transform())
 
                 
 

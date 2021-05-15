@@ -44,7 +44,7 @@ def retrieve_data(sensor_queue, frame, timeout=5):
 
 save_rgb = True
 save_depth = False
-save_segm = False
+save_segm = True
 save_lidar = False
 tick_sensor = 1
 
@@ -66,7 +66,7 @@ def main():
     argparser.add_argument(
         '-n', '--number-of-vehicles',
         metavar='N',
-        default=50,
+        default=100,
         type=int,
         help='number of vehicles (default: 10)')
     argparser.add_argument(
@@ -164,7 +164,7 @@ def main():
         print('Ego-vehicle ready')
 
         # Spawn RGB camera
-        cam_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
+        cam_transform = carla.Transform(carla.Location(x=1.5, z=1.4, y=0), carla.Rotation(pitch=0))
         cam_bp = world.get_blueprint_library().find('sensor.camera.rgb')
         cam_bp.set_attribute('sensor_tick', str(tick_sensor))
         cam = world.spawn_actor(cam_bp, cam_transform, attach_to=ego_vehicle)
@@ -193,7 +193,7 @@ def main():
         if save_segm:
             segm_bp = world.get_blueprint_library().find('sensor.camera.semantic_segmentation')
             segm_bp.set_attribute('sensor_tick', str(tick_sensor))
-            segm_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
+            segm_transform = carla.Transform(carla.Location(x=1.5, z=1.4, y=0), carla.Rotation(pitch=0))
             segm = world.spawn_actor(segm_bp, segm_transform, attach_to=ego_vehicle)
             cc_segm = carla.ColorConverter.CityScapesPalette
             nonvehicles_list.append(segm)
@@ -254,7 +254,7 @@ def main():
                 cva.save_output(rgb_img, filtered['bbox'], filtered['class'], removed['bbox'], removed['class'], save_patched=True, out_format='json')
                 
                 # Uncomment if you want to save the data in darknet format
-                #cva.save2darknet(filtered['bbox'], filtered['class'], rgb_img)
+                cva.save2darknet(filtered['bbox'], filtered['class'], rgb_img)
 
                 # Save segmentation image
                 if save_segm:

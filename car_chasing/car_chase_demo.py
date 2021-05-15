@@ -28,7 +28,15 @@ import pickle
 from util.carla_util import carla_vec_to_np_array, carla_img_to_array, CarlaSyncMode, find_weather_presets, get_font, should_quit #draw_image
 from util.geometry_util import dist_point_linestring
 
-
+# For birdeye view 
+from carla_birdeye_view import (
+    BirdViewProducer,
+    BirdView,
+    DEFAULT_HEIGHT,
+    DEFAULT_WIDTH,
+    BirdViewCropType,
+)
+from carla_birdeye_view.mask import PixelDimensions
 
 # For planners
 from object_avoidance import local_planner 
@@ -182,6 +190,16 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
     # controller = PurePursuitPlusPID()
 
+    # Set BirdView
+    birdview_producer = BirdViewProducer(
+        client,
+        PixelDimensions(width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT),
+        pixels_per_meter=4,
+        crop_type=BirdViewCropType.FRONT_AND_REAR_AREA,
+        render_lanes_on_junctions=False,
+    )
+
+
     try:
         m = world.get_map()
 
@@ -272,21 +290,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         PREV_BEST_PATH         = []
         stopsign_fences = [] 
 
-        l_planner = local_planner.LocalPlanner(NUM_PATHS,
-                                        PATH_OFFSET,
-                                        CIRCLE_OFFSETS,
-                                        CIRCLE_RADII,
-                                        PATH_SELECT_WEIGHT,
-                                        TIME_GAP,
-                                        A_MAX,
-                                        SLOW_SPEED,
-                                        STOP_LINE_BUFFER,
-                                        PREV_BEST_PATH)
-        b_planner = behavioural_planner.BehaviouralPlanner(BP_LOOKAHEAD_BASE,
-                                                    stopsign_fences,
-                                                    LEAD_VEHICLE_LOOKAHEAD)
-
-
 
         # --------------------------------------------------------------
 
@@ -298,7 +301,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         cross_track_error = 0
         start_time = 0.0
         times = 8
-        LP_FREQUENCY_DIVISOR = 8
+        LP_FREQUENCY_DIVISOR = 4
 
         # Create a synchronous mode context.
         with CarlaSyncMode(world, *sensors, fps=FPS) as sync_mode:
@@ -310,6 +313,18 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                 # Advance the simulation and wait for the data. 
                 # tick_response = sync_mode.tick(timeout=2.0)
+
+
+                # Display BirdView
+                # Input for your model - call it every simulation step
+                # returned result is np.ndarray with ones and zeros of shape (8, height, width)
+                
+                birdview = birdview_producer.produce(agent_vehicle=vehicle)
+                bgr = cv2.cvtColor(BirdViewProducer.as_rgb(birdview), cv2.COLOR_BGR2RGB)
+                # NOTE imshow requires BGR color model
+                cv2.imshow("BirdView RGB", bgr)
+                cv2.waitKey(1)
+
 
                 # snapshot, image_rgb, image_segmentation = tick_response
                 snapshot, img_rgb, image_segmentation = sync_mode.tick(timeout=2.0)
@@ -371,27 +386,27 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 location1 = vehicle.get_transform()
                 location2 = vehicleToFollow.get_transform()
 
-                if not obsticle_vehicleSpawned and followDrivenPath:
-                    obsticle_vehicleSpawned = True
-                    # Adding new obsticle vehicle 
+                # if not obsticle_vehicleSpawned and followDrivenPath:
+                #     obsticle_vehicleSpawned = True
+                #     # Adding new obsticle vehicle 
 
-                    start_pose3 = random.choice(m.get_spawn_points())
+                #     start_pose3 = random.choice(m.get_spawn_points())
 
-                    obsticle_vehicle = world.spawn_actor(
-                        random.choice(blueprint_library.filter('jeep')),
-                        start_pose3)
+                #     obsticle_vehicle = world.spawn_actor(
+                #         random.choice(blueprint_library.filter('jeep')),
+                #         start_pose3)
 
-                    start_pose3 = carla.Transform()
-                    start_pose3.rotation = start_pose2.rotation
-                    start_pose3.location.x = start_pose2.location.x 
-                    start_pose3.location.y =  start_pose2.location.y + 50 
-                    start_pose3.location.z =  start_pose2.location.z
+                #     start_pose3 = carla.Transform()
+                #     start_pose3.rotation = start_pose2.rotation
+                #     start_pose3.location.x = start_pose2.location.x 
+                #     start_pose3.location.y =  start_pose2.location.y + 50 
+                #     start_pose3.location.z =  start_pose2.location.z
 
-                    obsticle_vehicle.set_transform(start_pose3)
+                #     obsticle_vehicle.set_transform(start_pose3)
 
 
-                    actor_list.append(obsticle_vehicle)
-                    obsticle_vehicle.set_simulate_physics(True)
+                #     actor_list.append(obsticle_vehicle)
+                #     obsticle_vehicle.set_simulate_physics(True)
 
 
 
@@ -431,84 +446,84 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 #         parkedcar_box_pts.append([cpos[0,j], cpos[1,j]])
 
 
-                if frame % LP_FREQUENCY_DIVISOR == 0:
-                    # Update vehicleToFollow transorm with obsticles
-                    # --------------------------------------------------------------
-                    _LOOKAHEAD_INDEX = 5
-                    _BP_LOOKAHEAD_BASE = 8.0              # m 
-                    _BP_LOOKAHEAD_TIME = 2.0              # s 
+                # if frame % LP_FREQUENCY_DIVISOR == 0:
+                #     # Update vehicleToFollow transorm with obsticles
+                #     # --------------------------------------------------------------
+                #     _LOOKAHEAD_INDEX = 5
+                #     _BP_LOOKAHEAD_BASE = 8.0              # m 
+                #     _BP_LOOKAHEAD_TIME = 2.0              # s 
 
 
-                    # unsupported operand type(s) for +: 'float' and 'Vector3D'
-                    lookahead_time = _BP_LOOKAHEAD_BASE +  _BP_LOOKAHEAD_TIME *  vehicleToFollow.get_velocity().z
+                #     # unsupported operand type(s) for +: 'float' and 'Vector3D'
+                #     lookahead_time = _BP_LOOKAHEAD_BASE +  _BP_LOOKAHEAD_TIME *  vehicleToFollow.get_velocity().z
 
 
-                    location3 = obsticle_vehicle.get_transform()
+                #     location3 = obsticle_vehicle.get_transform()
                     
-                    # Calculate the goal state set in the local frame for the local planner.
-                    # Current speed should be open loop for the velocity profile generation.
-                    ego_state = [location2.location.x, location2.location.y, location2.rotation.yaw, vehicleToFollow.get_velocity().z]
+                #     # Calculate the goal state set in the local frame for the local planner.
+                #     # Current speed should be open loop for the velocity profile generation.
+                #     ego_state = [location2.location.x, location2.location.y, location2.rotation.yaw, vehicleToFollow.get_velocity().z]
 
-                    # Set lookahead based on current speed.
-                    b_planner.set_lookahead(_BP_LOOKAHEAD_BASE + _BP_LOOKAHEAD_TIME * vehicleToFollow.get_velocity().z)
+                #     # Set lookahead based on current speed.
+                #     b_planner.set_lookahead(_BP_LOOKAHEAD_BASE + _BP_LOOKAHEAD_TIME * vehicleToFollow.get_velocity().z)
 
                     
-                    # Perform a state transition in the behavioural planner.
-                    b_planner.transition_state(evaluation.history, ego_state, current_speed)
-                    print("The current speed = %f" % current_speed)
+                #     # Perform a state transition in the behavioural planner.
+                #     b_planner.transition_state(evaluation.history, ego_state, current_speed)
+                #     # print("The current speed = %f" % current_speed)
 
-                    # # Find the closest index to the ego vehicle.
-                    # closest_len, closest_index = behavioural_planner.get_closest_index(evaluation.history, ego_state)
+                #     # # Find the closest index to the ego vehicle.
+                #     # closest_len, closest_index = behavioural_planner.get_closest_index(evaluation.history, ego_state)
 
-                    # print("closest_len: ", closest_len)
-                    # print("closest_index: ", closest_index)
+                #     # print("closest_len: ", closest_len)
+                #     # print("closest_index: ", closest_index)
                     
-                    # # Find the goal index that lies within the lookahead distance
-                    # # along the waypoints.
-                    # goal_index = b_planner.get_goal_index(evaluation.history, ego_state, closest_len, closest_index)
+                #     # # Find the goal index that lies within the lookahead distance
+                #     # # along the waypoints.
+                #     # goal_index = b_planner.get_goal_index(evaluation.history, ego_state, closest_len, closest_index)
 
-                    # print("goal_index: ", goal_index)
+                #     # print("goal_index: ", goal_index)
 
-                    # # Set goal_state
-                    # goal_state = evaluation.history[goal_index]
+                #     # # Set goal_state
+                #     # goal_state = evaluation.history[goal_index]
             
-                    # Compute the goal state set from the behavioural planner's computed goal state.
-                    goal_state_set = l_planner.get_goal_state_set(b_planner._goal_index, b_planner._goal_state, evaluation.history, ego_state)
+                #     # Compute the goal state set from the behavioural planner's computed goal state.
+                #     goal_state_set = l_planner.get_goal_state_set(b_planner._goal_index, b_planner._goal_state, evaluation.history, ego_state)
 
-                    # # Calculate planned paths in the local frame.
-                    paths, path_validity = l_planner.plan_paths(goal_state_set)
+                #     # # Calculate planned paths in the local frame.
+                #     paths, path_validity = l_planner.plan_paths(goal_state_set)
 
-                    # # Transform those paths back to the global frame.
-                    paths = local_planner.transform_paths(paths, ego_state)
+                #     # # Transform those paths back to the global frame.
+                #     paths = local_planner.transform_paths(paths, ego_state)
 
-                    # Detect obsticle car
-                    obsticle_bbox, obsticle_predicted_distance, obsticle_predicted_angle = carDetector.getDistance(obsticle_vehicle, camera_rgb,carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
+                #     # Detect obsticle car
+                #     obsticle_bbox, obsticle_predicted_distance, obsticle_predicted_angle = carDetector.getDistance(obsticle_vehicle, camera_rgb,carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
 
-                    obsticle_bbox =[ [bbox[0],bbox[1]] for bbox in obsticle_bbox] 
+                #     obsticle_bbox =[ [bbox[0],bbox[1]] for bbox in obsticle_bbox] 
      
-                    print("paths: ", paths)
+                #     print("paths: ", paths)
 
 
-                    if obsticle_bbox:
-                        # # Perform collision checking.
-                        collision_check_array = l_planner._collision_checker.collision_check(paths, [obsticle_bbox])
-                        print("collision_check_array: ", collision_check_array)
+                #     if obsticle_bbox:
+                #         # # Perform collision checking.
+                #         collision_check_array = l_planner._collision_checker.collision_check(paths, [obsticle_bbox])
+                #         print("collision_check_array: ", collision_check_array)
 
-                        # Compute the best local path.
-                        best_index = l_planner._collision_checker.select_best_path_index(paths, collision_check_array, b_planner._goal_state)
-                        print("The best_index :", best_index)
+                #         # Compute the best local path.
+                #         best_index = l_planner._collision_checker.select_best_path_index(paths, collision_check_array, b_planner._goal_state)
+                #         print("The best_index :", best_index)
 
 
-                    desired_speed = b_planner._goal_state[2]
-                    print("The desired_speed = %f" % desired_speed)
+                #     desired_speed = b_planner._goal_state[2]
+                #     print("The desired_speed = %f" % desired_speed)
 
-                newX, newY = carDetector.CreatePointInFrontOFCar(location2.location.x, location2.location.y,location2.rotation.yaw)
-                new_angle = carDetector.getAngle([location2.location.x, location2.location.y], [newX, newY],
-                                             [location3.location.x, location3.location.y])
+                # newX, newY = carDetector.CreatePointInFrontOFCar(location2.location.x, location2.location.y,location2.rotation.yaw)
+                # new_angle = carDetector.getAngle([location2.location.x, location2.location.y], [newX, newY],
+                #                              [location3.location.x, location3.location.y])
                 
-                tmp = evaluation.history[counter-1]
-                currentPos = carla.Transform(carla.Location(tmp[0] + 0 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
-                vehicleToFollow.set_transform(currentPos)
+                # tmp = evaluation.history[counter-1]
+                # currentPos = carla.Transform(carla.Location(tmp[0] + 0 ,tmp[1],tmp[2]),carla.Rotation(tmp[3],tmp[4],tmp[5]))
+                # vehicleToFollow.set_transform(currentPos)
 
 
                 # --------------------------------------------------------------
@@ -527,7 +542,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 bbox = []
 
                 
-                bbox, predicted_distance,predicted_angle = carDetector.getDistance(vehicleToFollow, camera_rgb,carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
+                bbox, predicted_distance,predicted_angle = carDetector.getDistance(vehicleToFollow, camera_rgb, carInTheImage,extrapolation=extrapolate,nOfFramesToSkip=nOfFramesToSkip)
 
                 if frame % LP_FREQUENCY_DIVISOR == 0:
                     # This is the bottle neck and takes times to run. But it is necessary for chasing around turns
@@ -545,38 +560,6 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
              
 
 
-                # if start_time >= 1000.0/times:
-                #     start_time = 0.0
-                #     traj = get_trajectory_from_lane_detector(ld, image_windshield)
-
-                #     # rgb_cam = process_img(image_windshield)
-                #     # cv2.imshow("windshield", rgb_cam)
-                #     # cv2.waitKey(1)
-
-                #     # # get velocity and angular velocity
-                #     # vel = carla_vec_to_np_array(vehicle.get_velocity())
-                #     # forward = carla_vec_to_np_array(vehicle.get_transform().get_forward_vector())
-                #     # right = carla_vec_to_np_array(vehicle.get_transform().get_right_vector())
-                #     # up = carla_vec_to_np_array(vehicle.get_transform().get_up_vector())
-                #     # vx = vel.dot(forward)
-                #     # vy = vel.dot(right)
-                #     # vz = vel.dot(up)
-                #     # ang_vel = carla_vec_to_np_array(vehicle.get_angular_velocity())
-                #     # w = ang_vel.dot(up)
-                #     # print("vx vy vz w {:.2f} {:.2f} {:.2f} {:.5f}".format(vx,vy,vz,w))
-
-                #     # PID control
-                #     speed = np.linalg.norm(carla_vec_to_np_array(vehicle.get_velocity()))
-                #     throttle, steer = controller.get_control(traj, speed, desired_speed=44, dt=1./FPS)
-                #     send_control(vehicle, throttle, steer, 0)
-
-
-                #     dist = dist_point_linestring(np.array([0,0]), traj)
-
-                #     cross_track_error = int(dist*100)
-
-                # max_error = max(max_error, cross_track_error)
-
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
                 # Draw the display.
@@ -591,6 +574,9 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 display.blit(
                     font.render('     speed: {:.2f} m/s'.format(speed), True, (255, 255, 255)),
                     (8, 46))
+                display.blit(
+                    font.render('     distance to target: {:.2f} m'.format(real_dist), True, (255, 255, 255)),
+                    (8, 66))
                 # display.blit(
                 #     font.render('     cross track error: {:03d} cm'.format(cross_track_error), True, (255, 255, 255)),
                 #     (8, 64))
@@ -656,7 +642,7 @@ if __name__ == '__main__':
         drivesFileNames = os.listdir(drivesDir)
         drivesFileNames.sort()
 
-        drivesFileNames = ['ride5.p']  #   ['ride8.p']  ['ride10.p']  for testing advance angle turns # turnel ['ride15.p']  
+        drivesFileNames = ['ride10.p']  #  ['ride5.p']   ['ride8.p']  ['ride10.p']  for testing advance angle turns # turnel ['ride15.p']  
 
         for fileName in drivesFileNames:
             main(optimalDistance=optimalDistance,followDrivenPath=followDrivenPath,chaseMode=chaseMode, evaluateChasingCar=evaluateChasingCar,driveName=os.path.join(drivesDir,fileName),record=record,followMode=followMode)
