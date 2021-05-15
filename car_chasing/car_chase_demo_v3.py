@@ -254,7 +254,6 @@ def calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0):
 
 
 def calc_global_paths(fplist, csp):
-    print("len(fplist): ", len(fplist))
     for fp in fplist:
 
         # calc global positions
@@ -654,7 +653,7 @@ MIN_T = 3.0  # min prediction time [m]
 TARGET_SPEED = 30.0 / 3.6  # target speed [m/s]
 D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
 N_S_SAMPLE = 1  # sampling number of target speed
-ROBOT_RADIUS = 2.2  # robot radius [m]
+ROBOT_RADIUS = 2.3  # robot radius [m]
 
 # cost weights
 K_J = 0.1
@@ -827,10 +826,11 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
         # TMP obstacle lists
         ob = np.array([
-                       [233.980630, 60.523910],
-                       [233.980630, 80.523910],
-                       [233.980630, 100.523910],
-                       [233.786942, 110.530586],
+                       [233.980630, 50.523910],
+                       [232.980630, 80.523910],
+                       [234.980630, 100.523910],
+                       [235.786942, 110.530586],
+                       [234.980630, 120.523910],
                        ])
         
 
@@ -895,7 +895,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
         c_d_dd = 0.0  # current latral acceleration [m/s]
         s0 = 0.0  # current course position    
         
-        trail_c_speed = 10.0 / 3.6  # current speed [m/s]
+        trail_c_speed = 20.0 / 3.6  # current speed [m/s]
         trail_c_d = 2.0  # current lateral position [m]
         trail_c_d_d = 0.0  # current lateral speed [m/s]
         trail_c_d_dd = 0.0  # current latral acceleration [m/s]
@@ -964,7 +964,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
                     actor_list.append(vehicleToFollow)
                     vehicleToFollow.set_simulate_physics(True)
-                    # vehicleToFollow.set_autopilot(False)
+                    vehicleToFollow.set_autopilot(True)
 
                 if followDrivenPath:
                     if counter >= len(evaluation.history):
@@ -997,7 +997,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                         start_pose3.location.z =  start_pose2.location.z
 
                         obsticle_vehicle.set_transform(start_pose3)
-                        # obsticle_vehicle.set_autopilot(True)
+                        obsticle_vehicle.set_autopilot(True)
 
         
                         actor_list.append(obsticle_vehicle)
@@ -1013,7 +1013,14 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 path = frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob)
 
                 # f_idx = 1
+
+
+
+
+
                 ob = np.array([ [actor.get_transform().location.x,actor.get_transform().location.y] for actor in actor_list if actor.id in other_actor_ids ])
+
+
 
                 # wps_to_go = len(path.t) - 3 
                 # print("wps_to_go: ", wps_to_go)
@@ -1205,7 +1212,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
 
 #                     speed = get_speed(vehicle)
-                    FRENET_FREQUENCY_DIVISOR = 2
+                    FRENET_FREQUENCY_DIVISOR = 1
                     if (frame % FRENET_FREQUENCY_DIVISOR == 0) and (real_dist > 5):
 
 
@@ -1251,6 +1258,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
 
 #                                 location2 = new_vehicle_transform
                             vehicle.set_transform(new_vehicle_transform)
+
 
 
 
@@ -1352,6 +1360,7 @@ def main(optimalDistance, followDrivenPath, chaseMode, evaluateChasingCar, drive
                 pygame.display.flip()
 
                 frame += 1
+                i += 1
                 # if save_gif and frame > 1000:
                 #     print("frame=",frame)
                 #     imgdata = pygame.surfarray.array3d(pygame.display.get_surface())
